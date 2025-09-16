@@ -1,4 +1,4 @@
-#!/Users/ercibrito/Documents/dissertacao/projeto-modelo/.venv/bin/python3.12
+#!/Users/ercibrito/Documents/selecao-portfolio/.venv/bin/python3.12
 # -*- coding: utf-8 -*-
 import re
 import sys

@@ -15,7 +15,7 @@ import os
 def carregar_dados(file):
 # Carrega os dados e padroniza a coluna de data
 
-    base_dados = pd.read_csv(f'./data/raw_input/{file}.csv')
+    base_dados = pd.read_csv(f'./data/raw/refinitiv/{file}.csv')
     base_dados['Exchange Date'] = base_dados['Exchange Date'].str.replace('.', '')
     base_dados['Exchange Date'] = pd.to_datetime(base_dados['Exchange Date'], format='%d-%b-%Y', errors='coerce')
     return base_dados
@@ -89,6 +89,11 @@ def x_split(base_dados):
 def y_split (base_dados):
     y_dados = base_dados['target'].values
     return y_dados
+
+def z_split (base_dados):
+    colunas_de_interesse = ['Exchange Date', 'resultado_real']
+    z_dados = base_dados[colunas_de_interesse].copy()
+    return z_dados
 
 def features_selection(x_dados, correlation_threshold=0.8):
     colunas_de_interesse = [

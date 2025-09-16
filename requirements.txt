@@ -2,3 +2,7 @@ pandas
 numpy
 TA-Lib
 scikit-learn
+tqdm
+feature_engine
+openpyxl
+matplotlib
