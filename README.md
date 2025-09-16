@@ -1,4 +1,4 @@
-# Projeto de Simulação de Investimentos
+# Projeto de Seleção de Portfólios
 
 Este repositório contém scripts e dados para tratamento, modelagem, simulação e visualização de estratégias de investimento na B3, incluindo análise de performance de modelos de classificação e simulação de capital ao longo do tempo.
 
