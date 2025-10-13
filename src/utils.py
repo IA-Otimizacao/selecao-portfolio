@@ -91,7 +91,7 @@ def y_split (base_dados):
     return y_dados
 
 def z_split (base_dados):
-    colunas_de_interesse = ['Exchange Date', 'resultado_real']
+    colunas_de_interesse = ['Exchange Date', 'resultado_real', 'target']
     z_dados = base_dados[colunas_de_interesse].copy()
     return z_dados
 
@@ -152,6 +152,10 @@ def treinar_e_avaliar(x_treino, y_treino, x_teste, y_teste_real, parametros_rna,
         'Random Forest': {'previsoes': [], 'y_real': [], 'probabilidades': []},
         'SVC': {'previsoes': [], 'y_real': [], 'probabilidades': []}
     }
+
+    # if len(np.unique(y_treino)) < 2:
+    #     return resultados
+    
     scaler_dados = StandardScaler()
     x_treino_normalizado = scaler_dados.fit_transform(x_treino)
     x_teste_normalizado = scaler_dados.transform(x_teste)
@@ -164,9 +168,11 @@ def treinar_e_avaliar(x_treino, y_treino, x_teste, y_teste_real, parametros_rna,
     y_previsao_rna = melhor_rna.predict(x_teste_normalizado)
     y_proba_rna = melhor_rna.predict_proba(x_teste_normalizado)
 
+    prob_rna = y_proba_rna[0][1] if y_proba_rna.shape[1] > 1 else y_proba_rna[0][0]
+
     resultados['RNA']['previsoes'].append(int(y_previsao_rna[0]))
     resultados['RNA']['y_real'].append(int(y_teste_real))
-    resultados['RNA']['probabilidades'].append(y_proba_rna[0][1])
+    resultados['RNA']['probabilidades'].append(prob_rna)
 
     # Random Forest com Grid Search
     rf = RandomForestClassifier(random_state=42)
@@ -176,9 +182,11 @@ def treinar_e_avaliar(x_treino, y_treino, x_teste, y_teste_real, parametros_rna,
     y_previsao_rf = melhor_rf.predict(x_teste_normalizado)
     y_proba_rf = melhor_rf.predict_proba(x_teste_normalizado)
 
+    prob_rf = y_proba_rf[0][1] if y_proba_rf.shape[1] > 1 else y_proba_rf[0][0]
+
     resultados['Random Forest']['previsoes'].append(int(y_previsao_rf[0]))
     resultados['Random Forest']['y_real'].append(int(y_teste_real))
-    resultados['Random Forest']['probabilidades'].append(y_proba_rf[0][1])
+    resultados['Random Forest']['probabilidades'].append(prob_rf)
 
     # SVC com Grid Search
     svc = SVC(probability=True, random_state=42)
@@ -188,9 +196,11 @@ def treinar_e_avaliar(x_treino, y_treino, x_teste, y_teste_real, parametros_rna,
     y_previsao_svc = melhor_svc.predict(x_teste_normalizado)
     y_proba_svc = melhor_svc.predict_proba(x_teste_normalizado)
 
+    prob_svc = y_proba_svc[0][1] if y_proba_svc.shape[1] > 1 else y_proba_svc[0][0]
+
     resultados['SVC']['previsoes'].append(int(y_previsao_svc[0]))
     resultados['SVC']['y_real'].append(int(y_teste_real))
-    resultados['SVC']['probabilidades'].append(y_proba_svc[0][1])
+    resultados['SVC']['probabilidades'].append(prob_svc)
 
     return resultados
 

@@ -9,9 +9,9 @@ warnings.filterwarnings("ignore")
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
 
-todos = ['PETR4-50', 'ITUB4-50', 'VALE3-50']
+todos = ['PETR4', 'ITUB4', 'VALE3']
 targets = [1.01, 1.015, 1.02]
-ibov = 'Ibov_Pronto_4'
+ibov = 'ibov_filtrado'
 
 janela_temporal = 4
 janelas_tamanho = [15, 20, 25]
@@ -40,7 +40,7 @@ parametros_svc = {
 
 def main():
     ibov_status = carregar_ibov(ibov)
-    base_petr4 = carregar_dados('PETR4-50')
+    base_petr4 = carregar_dados('PETR4')
 
     os.makedirs("./data/raw", exist_ok=True)
     os.makedirs("./data/curated", exist_ok=True)
@@ -107,6 +107,7 @@ def main():
                     # data e target real
                     data_atual = z_dados.at[i+janela+1, 'Exchange Date']
                     resultado_real = z_dados.at[i+janela+1, 'resultado_real']
+                    target_real = z_dados.at[i+janela+1, 'target']
                     y_real_atual = y_dados[i+janela+1]
 
                     # treinar e avaliar (ajuste de acordo com as técnicas que deseja)
@@ -133,13 +134,14 @@ def main():
                                 "janela": janela,
                                 "tecnica": modelo,
                                 "data": data_atual,
+                                "target_real": target_real,
                                 "target_pred": pred,
                                  "resultado_real": resultado_real
                             })
 
                 # exibir resultados da janela
                 print(f"\nAtivo: {file} - Target: {target} - Janela {janela}")
-                exibir_resultados(resultados_acumulados, janela, file, target, "./data/analytics/results/resultados_finais.csv")
+                exibir_resultados(resultados_acumulados, janela, file, target, "./data/analytics/results/resultados_finais1.csv")
 
                 # acumula os registros da janela no total do ativo
                 todos_registros.extend(registros)
