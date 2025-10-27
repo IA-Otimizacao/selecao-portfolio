@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import talib
 import warnings
+import time
+import os
+import locale
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier
@@ -10,25 +13,49 @@ from sklearn.metrics import accuracy_score, precision_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.feature_selection import VarianceThreshold
 from feature_engine.selection import DropCorrelatedFeatures
-import os
+
+
+# ==============================
+# DECORATOR DE CRONOMETRAGEM
+# ==============================
+def medir_tempo(func):
+    """Decorator para medir o tempo de execução de funções."""
+    def wrapper(*args, **kwargs):
+        inicio = time.time()
+        resultado = func(*args, **kwargs)
+        fim = time.time()
+        duracao = fim - inicio
+        print(f"\033[92m⏱ Função '{func.__name__}' executada em {duracao:.2f} segundos.\033[0m")
+        return resultado
+    return wrapper
+
+
+# ==============================
+# FUNÇÕES PRINCIPAIS
+# ==============================
 
 def carregar_dados(file):
-# Carrega os dados e padroniza a coluna de data
-
+    try:
+        locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
+    except:
+        pass
     base_dados = pd.read_csv(f'./data/raw/refinitiv/{file}.csv')
-    base_dados['Exchange Date'] = base_dados['Exchange Date'].str.replace('.', '')
-    base_dados['Exchange Date'] = pd.to_datetime(base_dados['Exchange Date'], format='%d-%b-%Y', errors='coerce')
+    base_dados['Exchange Date'] = base_dados['Exchange Date'].str.replace('.', '', regex=False).str.strip()
+    base_dados['Exchange Date'] = pd.to_datetime(
+        base_dados['Exchange Date'],
+        format='%d-%b-%Y',
+        errors='coerce'
+    )
     return base_dados
 
+
 def carregar_ibov(ibov):
-    # Substitua pelo caminho correto da sua planilha binária
     ibov_status = pd.read_excel(f'./data/ibov/{ibov}.xlsx')
     ibov_status['Exchange Date'] = pd.to_datetime(ibov_status['Exchange Date'])
     return ibov_status
 
-def padronizar_colunas(base_dados):
-# Substitui pontos e vírgulas nas colunas de texto e converte colunas para numéricas
 
+def padronizar_colunas(base_dados):
     for col in base_dados.columns:
         if base_dados[col].dtype == 'object':
             base_dados[col] = base_dados[col].str.replace('.', '')
@@ -37,18 +64,23 @@ def padronizar_colunas(base_dados):
             base_dados[col] = pd.to_numeric(base_dados[col], errors='coerce')
     return base_dados
 
-def remover_linhas_invalidas(base_dados):
-# Remove linhas com valores nulos ou negativos
 
+def remover_linhas_invalidas(base_dados):
     colunas_verificacao = ['Close', 'Open', 'Low', 'High', 'Volume']
     base_dados = base_dados.dropna(subset=colunas_verificacao)
     for col in colunas_verificacao:
         base_dados = base_dados.loc[base_dados[col] > 0]
     return base_dados
 
-def calcular_variaveis(base_dados):
-# Calcula as variáveis de 1 a 22 (16 a 22 com ta-lib)
+def garantir_numerico(base_dados, colunas):
+    for col in colunas:
+        if col in base_dados.columns:
+            base_dados[col] = pd.to_numeric(base_dados[col], errors='coerce')
+        else:
+            print(f"Aviso: coluna '{col}' não encontrada no DataFrame.")
+    return base_dados
 
+def calcular_variaveis(base_dados):
     base_dados['r1'] = np.log(base_dados['Close'] / base_dados['Close'].shift(1))
     base_dados['r2'] = np.log(base_dados['Close'].shift(1) / base_dados['Close'].shift(2))
     base_dados['r3'] = np.log(base_dados['Close'].shift(2) / base_dados['Close'].shift(3))
@@ -71,7 +103,6 @@ def calcular_variaveis(base_dados):
     base_dados['True_Range'] = talib.TRANGE(base_dados['High'], base_dados['Low'], base_dados['Close'])
     base_dados['Chaikin_AD'] = talib.AD(base_dados['High'], base_dados['Low'], base_dados['Close'], base_dados['Volume'])
     base_dados['OBV'] = talib.OBV(base_dados['Close'], base_dados['Volume'])
-
     return base_dados
 
 
@@ -81,54 +112,40 @@ def x_split(base_dados):
         'r13', 'r14', 'r15', 'Momentum', 'RSI', 'Parabolic_SAR', 'ATR', 'True_Range',
         'Chaikin_AD', 'OBV'
     ]
+    return base_dados[colunas_de_interesse].copy()
 
-    x_dados = base_dados[colunas_de_interesse].copy()
 
-    return x_dados
+def y_split(base_dados):
+    return base_dados['target'].values
 
-def y_split (base_dados):
-    y_dados = base_dados['target'].values
-    return y_dados
 
-def z_split (base_dados):
-    colunas_de_interesse = ['Exchange Date', 'resultado_real', 'target']
-    z_dados = base_dados[colunas_de_interesse].copy()
-    return z_dados
+def z_split(base_dados):
+    return base_dados[['Exchange Date', 'resultado_real', 'target']].copy()
 
+
+@medir_tempo
 def features_selection(x_dados, correlation_threshold=0.8):
     colunas_de_interesse = [
         'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12',
         'r13', 'r14', 'r15', 'Momentum', 'RSI', 'Parabolic_SAR', 'ATR', 'True_Range',
         'Chaikin_AD', 'OBV'
     ]
-
-    # Remove features quasi-constantes
     fs_qconst = VarianceThreshold(threshold=0.01)
     x_dados_filtrado = fs_qconst.fit_transform(x_dados)
-
     colunas_selecionadas = np.array(colunas_de_interesse)[fs_qconst.get_support()]
     x_dados_filtrado = pd.DataFrame(x_dados_filtrado, columns=colunas_selecionadas, index=x_dados.index)
 
-    # Remove variáveis correlacionadas
-    sel = DropCorrelatedFeatures(
-        threshold=correlation_threshold,
-        method='pearson',
-        missing_values='ignore'
-    )
-    x_dados_filtrado = sel.fit_transform(x_dados_filtrado)
+    sel = DropCorrelatedFeatures(threshold=correlation_threshold, method='pearson', missing_values='ignore')
+    return sel.fit_transform(x_dados_filtrado)
 
-    return x_dados_filtrado
+
 
 def calcular_target(base_dados, target, janela_temporal):
-# Calcula o target e o resultado real após a venda ser definida.
-
     base_dados = base_dados.reset_index(drop=True)
     base_dados['compra'] = base_dados['Open'].shift(-1)
     base_dados['maximo'] = base_dados['High'].rolling(window=janela_temporal).max().shift(-janela_temporal)
     base_dados['venda'] = base_dados['Close'].shift(-janela_temporal)
     base_dados['target'] = 0
-
-    # Loop para verificar se o target foi atingido e registro de venda
     for i in range(len(base_dados) - janela_temporal):
         compra = base_dados.at[i, 'compra']
         for j in range(1, janela_temporal + 1):
@@ -136,83 +153,118 @@ def calcular_target(base_dados, target, janela_temporal):
                 base_dados.at[i, 'venda'] = base_dados.at[i + j, 'High']
                 base_dados.at[i, 'target'] = 1
                 break
-
-    # Calculo do resultado real após a venda ser definida
-    base_dados['resultado_real'] = np.where(base_dados['target'] == 1,
+    base_dados['resultado_real'] = np.where(
+        base_dados['target'] == 1,
         (base_dados['maximo'] / base_dados['compra']) - 1,
-        (base_dados['venda'] / base_dados['compra']) - 1)
-    
-    y_dados = base_dados['target'].values
-
+        (base_dados['venda'] / base_dados['compra']) - 1
+    )
     return base_dados
 
-def treinar_e_avaliar(x_treino, y_treino, x_teste, y_teste_real, parametros_rna, parametros_rf, parametros_svc):
+
+@medir_tempo
+def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametros_rna, parametros_rf, parametros_svc):
     resultados = {
         'RNA': {'previsoes': [], 'y_real': [], 'probabilidades': []},
         'Random Forest': {'previsoes': [], 'y_real': [], 'probabilidades': []},
         'SVC': {'previsoes': [], 'y_real': [], 'probabilidades': []}
     }
 
-    # if len(np.unique(y_treino)) < 2:
-    #     return resultados
-    
     scaler_dados = StandardScaler()
     x_treino_normalizado = scaler_dados.fit_transform(x_treino)
     x_teste_normalizado = scaler_dados.transform(x_teste)
 
-    # RNA com Grid Search
-    rna = MLPClassifier(max_iter=3000, verbose=False, tol=0.00000100)
-    grid_rna = GridSearchCV(rna, parametros_rna, cv=3, scoring='accuracy')
-    grid_rna.fit(x_treino_normalizado, y_treino)
-    melhor_rna = grid_rna.best_estimator_
-    y_previsao_rna = melhor_rna.predict(x_teste_normalizado)
-    y_proba_rna = melhor_rna.predict_proba(x_teste_normalizado)
+    # ========================
+    # RNA
+    # ========================
+    if len(np.unique(y_treino)) < 2:
+        print("⚠️ RNA ignorada: apenas uma classe presente nos dados de treino.")
+    else:
+        print(f"\n🔹 Iniciando GridSearchCV para RNA - {file}...")
+        inicio_grid = time.time()
+        rna = MLPClassifier(max_iter=300, verbose=False, tol=0.001)
+        grid_rna = GridSearchCV(rna, parametros_rna, cv=3, scoring='accuracy')
+        grid_rna.fit(x_treino_normalizado, y_treino)
+        fim_grid = time.time()
+        print(f"⏱ Tempo total do GridSearchCV (RNA - {file}): {fim_grid - inicio_grid:.2f} segundos")
 
-    prob_rna = y_proba_rna[0][1] if y_proba_rna.shape[1] > 1 else y_proba_rna[0][0]
+        melhor_rna = grid_rna.best_estimator_
+        print(f"🚀 Iniciando treino do melhor modelo RNA - {file}...")
+        inicio_treino = time.time()
+        melhor_rna.fit(x_treino_normalizado, y_treino)
+        fim_treino = time.time()
+        print(f"⏱ Tempo de treino final (RNA- {file}): {fim_treino - inicio_treino:.2f} segundos")
 
-    resultados['RNA']['previsoes'].append(int(y_previsao_rna[0]))
-    resultados['RNA']['y_real'].append(int(y_teste_real))
-    resultados['RNA']['probabilidades'].append(prob_rna)
+        y_previsao_rna = melhor_rna.predict(x_teste_normalizado)
+        y_proba_rna = melhor_rna.predict_proba(x_teste_normalizado)
+        resultados['RNA']['previsoes'].append(int(y_previsao_rna[0]))
+        resultados['RNA']['y_real'].append(int(y_teste_real))
+        resultados['RNA']['probabilidades'].append(y_proba_rna[0][1])
 
-    # Random Forest com Grid Search
-    rf = RandomForestClassifier(random_state=42)
-    grid_rf = GridSearchCV(rf, parametros_rf, cv=3, scoring='accuracy')
-    grid_rf.fit(x_treino_normalizado, y_treino)
-    melhor_rf = grid_rf.best_estimator_
-    y_previsao_rf = melhor_rf.predict(x_teste_normalizado)
-    y_proba_rf = melhor_rf.predict_proba(x_teste_normalizado)
+    # ========================
+    # Random Forest
+    # ========================
+    if len(np.unique(y_treino)) < 2:
+        print("⚠️ Random Forest ignorada: apenas uma classe presente nos dados de treino.")
+    else:
+        print(f"\n🌲 Iniciando GridSearchCV para Random Forest- {file}...")
+        inicio_grid = time.time()
+        rf = RandomForestClassifier(random_state=42)
+        grid_rf = GridSearchCV(rf, parametros_rf, cv=3, scoring='accuracy')
+        grid_rf.fit(x_treino_normalizado, y_treino)
+        fim_grid = time.time()
+        print(f"⏱ Tempo total do GridSearchCV (Random Forest - {file}): {fim_grid - inicio_grid:.2f} segundos")
 
-    prob_rf = y_proba_rf[0][1] if y_proba_rf.shape[1] > 1 else y_proba_rf[0][0]
+        melhor_rf = grid_rf.best_estimator_
+        print(f"🚀 Iniciando treino do melhor modelo Random Forest - {file}...")
+        inicio_treino = time.time()
+        melhor_rf.fit(x_treino_normalizado, y_treino)
+        fim_treino = time.time()
+        print(f"⏱ Tempo de treino final (Random Forest): {fim_treino - inicio_treino:.2f} segundos")
 
-    resultados['Random Forest']['previsoes'].append(int(y_previsao_rf[0]))
-    resultados['Random Forest']['y_real'].append(int(y_teste_real))
-    resultados['Random Forest']['probabilidades'].append(prob_rf)
+        y_previsao_rf = melhor_rf.predict(x_teste_normalizado)
+        y_proba_rf = melhor_rf.predict_proba(x_teste_normalizado)
+        resultados['Random Forest']['previsoes'].append(int(y_previsao_rf[0]))
+        resultados['Random Forest']['y_real'].append(int(y_teste_real))
+        resultados['Random Forest']['probabilidades'].append(y_proba_rf[0][1])
 
-    # SVC com Grid Search
-    svc = SVC(probability=True, random_state=42)
-    grid_svc = GridSearchCV(svc, parametros_svc, cv=3, scoring='accuracy')
-    grid_svc.fit(x_treino_normalizado, y_treino)
-    melhor_svc = grid_svc.best_estimator_
-    y_previsao_svc = melhor_svc.predict(x_teste_normalizado)
-    y_proba_svc = melhor_svc.predict_proba(x_teste_normalizado)
+    # ========================
+    # SVC
+    # ========================
+    if len(np.unique(y_treino)) < 2:
+        print("⚠️ SVC ignorado: apenas uma classe presente nos dados de treino.")
+    else:
+        print(f"\n⚙️ Iniciando GridSearchCV para SVC - {file}...")
+        inicio_grid = time.time()
+        svc = SVC(probability=True, random_state=42)
+        grid_svc = GridSearchCV(svc, parametros_svc, cv=3, scoring='accuracy')
+        grid_svc.fit(x_treino_normalizado, y_treino)
+        fim_grid = time.time()
+        print(f"⏱ Tempo total do GridSearchCV (SVC)- {file}: {fim_grid - inicio_grid:.2f} segundos")
 
-    prob_svc = y_proba_svc[0][1] if y_proba_svc.shape[1] > 1 else y_proba_svc[0][0]
+        melhor_svc = grid_svc.best_estimator_
+        print(f"🚀 Iniciando treino do melhor modelo SVC - {file}...")
+        inicio_treino = time.time()
+        melhor_svc.fit(x_treino_normalizado, y_treino)
+        fim_treino = time.time()
+        print(f"⏱ Tempo de treino final (SVC) - {file}: {fim_treino - inicio_treino:.2f} segundos")
 
-    resultados['SVC']['previsoes'].append(int(y_previsao_svc[0]))
-    resultados['SVC']['y_real'].append(int(y_teste_real))
-    resultados['SVC']['probabilidades'].append(prob_svc)
+        y_previsao_svc = melhor_svc.predict(x_teste_normalizado)
+        y_proba_svc = melhor_svc.predict_proba(x_teste_normalizado)
+        resultados['SVC']['previsoes'].append(int(y_previsao_svc[0]))
+        resultados['SVC']['y_real'].append(int(y_teste_real))
+        resultados['SVC']['probabilidades'].append(y_proba_svc[0][1])
 
     return resultados
 
-def exibir_resultados(resultados, janela, ativo, target, caminho_csv="./data/results/resultados_finais.csv"):
-    registros = []  # vai guardar os dados para salvar
 
+@medir_tempo
+def exibir_resultados(resultados, janela, ativo, target, caminho_csv="./data/results/resultados_finais.csv"):
+    registros = []
     for tecnica, dados in resultados.items():
         y_real = dados['y_real']
         previsoes = dados['previsoes']
         probabilidades = dados['probabilidades']
 
-        # Evitar erro se só tem uma classe em y_real
         if len(set(y_real)) < 2:
             acuracia = float('nan')
             precision = float('nan')
@@ -220,16 +272,12 @@ def exibir_resultados(resultados, janela, ativo, target, caminho_csv="./data/res
             acuracia = accuracy_score(y_real, previsoes)
             precision = precision_score(y_real, previsoes)
 
-        # Exibição dos resultados
         print(f'\033[4mJanela {janela} - {tecnica}\033[0m')
         print(f'Acurácia: {acuracia:.2f}')
         print(f'Precisão: {precision:.2f}')
-        print()
         print(f'Previsões: {previsoes}')
         print(f'Valor real: {y_real}')
-        probabilidades_formatadas = [round(float(prob), 2) for prob in probabilidades]
-        print(f'Probabilidades: {probabilidades_formatadas}')
-        print()
+        print(f'Probabilidades: {[round(float(p), 2) for p in probabilidades]}\n')
 
         registros.append({
             "ativo": ativo,
@@ -240,7 +288,6 @@ def exibir_resultados(resultados, janela, ativo, target, caminho_csv="./data/res
             "precisao": precision
         })
 
-    # Salva ou atualiza o CSV
     os.makedirs(os.path.dirname(caminho_csv), exist_ok=True)
     if os.path.exists(caminho_csv):
         df_existente = pd.read_csv(caminho_csv)

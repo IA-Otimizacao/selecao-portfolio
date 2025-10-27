@@ -14,8 +14,8 @@ df = df[colunas_desejadas]
 df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
 
 # Filtra intervalo de datas
-start_date = "2005-01-24"
-end_date = "2005-04-07"
+start_date = "2020-01-01"
+end_date = "2025-01-01"
 mask = (df["Data"] >= start_date) & (df["Data"] <= end_date)
 df_filtrado = df.loc[mask].copy()
 

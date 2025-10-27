@@ -55,7 +55,7 @@ for file in os.listdir(input_folder):
             df["Exchange Date"] = pd.to_datetime(df["Exchange Date"], errors='coerce')
             
             # Aplica filtro de intervalo de datas
-            df = filtrar_intervalo(df, "10-01-2020", "10-04-2020")
+            df = filtrar_intervalo(df, "01-01-2020", "01-01-2025")
             
             # Formata novamente para '23-jan.-2005'
             df["Exchange Date"] = df["Exchange Date"].apply(formatar_data)
@@ -72,4 +72,4 @@ for file in os.listdir(input_folder):
         
         print(f"Convertido: {file} -> {csv_name} (intervalo de datas aplicado)")
 
-print("✅ Conversão concluída!")
+    print("✅ Conversão concluída!")
