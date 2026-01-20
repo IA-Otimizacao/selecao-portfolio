@@ -15,7 +15,7 @@ df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
 
 # Filtra intervalo de datas
 start_date = "2020-01-01"
-end_date = "2025-01-01"
+end_date = "2023-01-01"
 mask = (df["Data"] >= start_date) & (df["Data"] <= end_date)
 df_filtrado = df.loc[mask].copy()
 
@@ -28,3 +28,4 @@ print(df_filtrado.head())
 # Opcional: salvar em CSV
 # Salvar em Excel
 df_filtrado.to_excel("./data/ibov/ibov_filtrado.xlsx", index=False)
+df_filtrado.to_csv("./data/ibov/ibov_filtrado.csv", index=False)

@@ -1,52 +1,123 @@
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm
 
-def load_simulated_csvs(folder, file_pattern="_monetario.csv"):
-    dfs = []
-    for fname in os.listdir(folder):
-        if fname.endswith(file_pattern):
-            df = pd.read_csv(os.path.join(folder, fname), parse_dates=['data'])
-            dfs.append(df)
-    if dfs:
-        return pd.concat(dfs, ignore_index=True)
-    else:
-        return pd.DataFrame()
+# Caminhos
+input_path = "./data/monetario_completo"
+output_path = "./src/visualization"
+os.makedirs(output_path, exist_ok=True)
 
+# Lista de arquivos
+arquivos = [f for f in os.listdir(input_path) if f.endswith(".csv")]
 
-def plotar_valor_obtido(df: pd.DataFrame, pasta_saida: str = "plots"):
-    os.makedirs(pasta_saida, exist_ok=True)
+for file in tqdm(arquivos, desc="Gerando gráficos", unit="arquivo"):
 
-    # Garante que a coluna de data está no formato datetime
+    ativo = file.replace(".csv", "")
+    df = pd.read_csv(os.path.join(input_path, file))
+
+    # Garantir datetime
     df["data"] = pd.to_datetime(df["data"])
 
-    # Agrupa por ativo e target
-    for (ativo, target), df_sub in df.groupby(["ativo", "target"]):
-        plt.figure(figsize=(12, 6))
+    # Targets únicos
+    targets = sorted(df["target"].unique())
 
-        # Cada combinação janela+técnica vai ser uma linha
-        for (janela, tecnica), df_plot in df_sub.groupby(["janela", "tecnica"]):
-            df_plot = df_plot.sort_values("data")
-            label = f"Janela={janela}, Tec={tecnica}"
-            plt.plot(df_plot["data"], df_plot["valor_obtido"], label=label, linewidth=1.8)  # sem bolinhas
+    # Mesmas cores para cada target
+    cores = ["blue", "red", "green"]
 
-        plt.title(f"{ativo} - Target {target}")
-        plt.xlabel("Data")
-        plt.ylabel("Valor Obtido")
-        plt.legend(fontsize=9)
-        plt.grid(True, linestyle="--", alpha=0.6)
+    # Estilos para cada técnica
+    estilos = {
+        "tot": "-",
+        "par": "--",
+        "precision": ":"
+    }
 
-        # Salva imagem
-        nome_arquivo = f"{ativo}_target{target}.png"
-        caminho = os.path.join(pasta_saida, nome_arquivo)
-        plt.savefig(caminho, dpi=300, bbox_inches="tight")
-        plt.close()
+    plt.figure(figsize=(14, 7))
 
-        print(f"Gráfico salvo: {caminho}")
+    # Loop por target
+    for idx, target in enumerate(targets):
+        df_t = df[df["target"] == target]
+
+        cor = cores[idx]  # cor fixa para o target
+
+        # TOT
+        plt.plot(df_t["data"], df_t["capital_tot"],
+                 label=f"TOT - Target {target}",
+                 color=cor,
+                 linestyle=estilos["tot"],
+                 linewidth=2)
+
+        # PAR
+        plt.plot(df_t["data"], df_t["capital_par"],
+                 label=f"PAR - Target {target}",
+                 color=cor,
+                 linestyle=estilos["par"],
+                 linewidth=2)
+
+        # PRECISION
+        plt.plot(df_t["data"], df_t["capital_precision"],
+                 label=f"PRECISION - Target {target}",
+                 color=cor,
+                 linestyle=estilos["precision"],
+                 linewidth=2)
+
+    # Layout
+    plt.title(f"Evolução do Capital por Target e Técnica — {ativo}", fontsize=14)
+    plt.xlabel("Data")
+    plt.ylabel("Capital")
+    plt.legend(ncol=3)
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.ticklabel_format(style='plain', axis='y')
 
 
-folder = "./data/monetario/"
-df_all = load_simulated_csvs(folder)
+    plt.tight_layout()
 
-# Gera e salva os gráficos
-plotar_valor_obtido(df_all, pasta_saida="./src/visualization/")
+    # Salvar
+    out_file = os.path.join(output_path, f"{ativo}.png")
+    plt.savefig(out_file, dpi=300)
+    plt.close()
+
+    # ================================
+    # 2) GRÁFICO FILTRADO ATÉ 2021-06-04
+    # ================================
+    df_filtrado = df[df["data"] <= "2021-06-04"]
+
+    plt.figure(figsize=(14, 7))
+
+    for idx, target in enumerate(targets):
+        df_t = df_filtrado[df_filtrado["target"] == target]
+
+        cor = cores[idx]
+
+        plt.plot(df_t["data"], df_t["capital_tot"],
+                label=f"TOT - Target {target}",
+                color=cor, linestyle=estilos["tot"], linewidth=2)
+
+        plt.plot(df_t["data"], df_t["capital_par"],
+                label=f"PAR - Target {target}",
+                color=cor, linestyle=estilos["par"], linewidth=2)
+
+        plt.plot(df_t["data"], df_t["capital_precision"],
+                label=f"PRECISION - Target {target}",
+                color=cor, linestyle=estilos["precision"], linewidth=2)
+
+    plt.title(f"Evolução do Capital até 2021-06-04 — {ativo}", fontsize=14)
+    plt.xlabel("Data")
+    plt.ylabel("Capital")
+    plt.legend(ncol=3)
+    plt.grid(True)
+    plt.xticks(rotation=45)
+
+    plt.ticklabel_format(style='plain', axis='y')  # mantém dinheiro sem notação científica
+    plt.tight_layout()
+
+    out_file_filtrado = os.path.join(output_path, f"{ativo}_até_2021-06-04.png")
+    plt.savefig(out_file_filtrado, dpi=300)
+    plt.close()
+
+
+print("Gráficos gerados em src/visualization/")
+
+
+

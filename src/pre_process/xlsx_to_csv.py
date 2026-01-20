@@ -55,7 +55,7 @@ for file in os.listdir(input_folder):
             df["Exchange Date"] = pd.to_datetime(df["Exchange Date"], errors='coerce')
             
             # Aplica filtro de intervalo de datas
-            df = filtrar_intervalo(df, "01-01-2020", "01-01-2025")
+            df = filtrar_intervalo(df, "01-01-2020", "01-01-2023")
             
             # Formata novamente para '23-jan.-2005'
             df["Exchange Date"] = df["Exchange Date"].apply(formatar_data)

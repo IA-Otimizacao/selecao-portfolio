@@ -162,11 +162,17 @@ def calcular_target(base_dados, target, janela_temporal):
 
 
 @medir_tempo
-def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametros_rna, parametros_rf, parametros_svc):
+def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
+                      parametros_rna, parametros_rf, parametros_svc):
+    """
+    Função principal de treino e avaliação dos modelos RNA, Random Forest e SVC.
+    Retorna previsões out-of-sample, além de resultados in-sample (y_in, y_treino e precision_in).
+    """
+
     resultados = {
-        'RNA': {'previsoes': [], 'y_real': [], 'probabilidades': []},
-        'Random Forest': {'previsoes': [], 'y_real': [], 'probabilidades': []},
-        'SVC': {'previsoes': [], 'y_real': [], 'probabilidades': []}
+        'RNA': {'previsoes': [], 'y_real': [],'y_treino': [], 'y_in': [], 'precision_in': None},
+        'Random Forest': {'previsoes': [], 'y_real': [], 'y_treino': [],'y_in': [],  'precision_in': None},
+        'SVC': {'previsoes': [], 'y_real': [], 'y_treino': [], 'y_in': [], 'precision_in': None}
     }
 
     scaler_dados = StandardScaler()
@@ -194,11 +200,18 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametro
         fim_treino = time.time()
         print(f"⏱ Tempo de treino final (RNA- {file}): {fim_treino - inicio_treino:.2f} segundos")
 
+        # ---- In-sample (RNA)
+        y_in_rna = melhor_rna.predict(x_treino_normalizado)
+        precision_in_rna = precision_score(y_treino, y_in_rna, zero_division=0)
+
+        resultados['RNA']['y_in'] = list(y_in_rna)
+        resultados['RNA']['y_treino'] = list(y_treino)
+        resultados['RNA']['precision_in'] = precision_in_rna
+
+        # ---- Out-of-sample
         y_previsao_rna = melhor_rna.predict(x_teste_normalizado)
-        y_proba_rna = melhor_rna.predict_proba(x_teste_normalizado)
         resultados['RNA']['previsoes'].append(int(y_previsao_rna[0]))
         resultados['RNA']['y_real'].append(int(y_teste_real))
-        resultados['RNA']['probabilidades'].append(y_proba_rna[0][1])
 
     # ========================
     # Random Forest
@@ -206,7 +219,7 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametro
     if len(np.unique(y_treino)) < 2:
         print("⚠️ Random Forest ignorada: apenas uma classe presente nos dados de treino.")
     else:
-        print(f"\n🌲 Iniciando GridSearchCV para Random Forest- {file}...")
+        print(f"\n🌲 Iniciando GridSearchCV para Random Forest - {file}...")
         inicio_grid = time.time()
         rf = RandomForestClassifier(random_state=42)
         grid_rf = GridSearchCV(rf, parametros_rf, cv=3, scoring='accuracy')
@@ -221,11 +234,18 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametro
         fim_treino = time.time()
         print(f"⏱ Tempo de treino final (Random Forest): {fim_treino - inicio_treino:.2f} segundos")
 
+        # ---- In-sample (RF)
+        y_in_rf = melhor_rf.predict(x_treino_normalizado)
+        precision_in_rf = precision_score(y_treino, y_in_rf, zero_division=0)
+
+        resultados['Random Forest']['y_in'] = list(y_in_rf)
+        resultados['Random Forest']['y_treino'] = list(y_treino)
+        resultados['Random Forest']['precision_in'] = precision_in_rf
+
+        # ---- Out-of-sample
         y_previsao_rf = melhor_rf.predict(x_teste_normalizado)
-        y_proba_rf = melhor_rf.predict_proba(x_teste_normalizado)
         resultados['Random Forest']['previsoes'].append(int(y_previsao_rf[0]))
         resultados['Random Forest']['y_real'].append(int(y_teste_real))
-        resultados['Random Forest']['probabilidades'].append(y_proba_rf[0][1])
 
     # ========================
     # SVC
@@ -235,64 +255,30 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real, parametro
     else:
         print(f"\n⚙️ Iniciando GridSearchCV para SVC - {file}...")
         inicio_grid = time.time()
-        svc = SVC(probability=True, random_state=42)
+        svc = SVC(probability=False, random_state=42)
         grid_svc = GridSearchCV(svc, parametros_svc, cv=3, scoring='accuracy')
         grid_svc.fit(x_treino_normalizado, y_treino)
         fim_grid = time.time()
-        print(f"⏱ Tempo total do GridSearchCV (SVC)- {file}: {fim_grid - inicio_grid:.2f} segundos")
+        print(f"⏱ Tempo total do GridSearchCV (SVC - {file}): {fim_grid - inicio_grid:.2f} segundos")
 
         melhor_svc = grid_svc.best_estimator_
         print(f"🚀 Iniciando treino do melhor modelo SVC - {file}...")
         inicio_treino = time.time()
         melhor_svc.fit(x_treino_normalizado, y_treino)
         fim_treino = time.time()
-        print(f"⏱ Tempo de treino final (SVC) - {file}: {fim_treino - inicio_treino:.2f} segundos")
+        print(f"⏱ Tempo de treino final (SVC - {file}): {fim_treino - inicio_treino:.2f} segundos")
 
+        # ---- In-sample (SVC)
+        y_in_svc = melhor_svc.predict(x_treino_normalizado)
+        precision_in_svc = precision_score(y_treino, y_in_svc, zero_division=0)
+
+        resultados['SVC']['y_in'] = list(y_in_svc)
+        resultados['SVC']['y_treino'] = list(y_treino)
+        resultados['SVC']['precision_in'] = precision_in_svc
+
+        # ---- Out-of-sample
         y_previsao_svc = melhor_svc.predict(x_teste_normalizado)
-        y_proba_svc = melhor_svc.predict_proba(x_teste_normalizado)
         resultados['SVC']['previsoes'].append(int(y_previsao_svc[0]))
         resultados['SVC']['y_real'].append(int(y_teste_real))
-        resultados['SVC']['probabilidades'].append(y_proba_svc[0][1])
 
     return resultados
-
-
-@medir_tempo
-def exibir_resultados(resultados, janela, ativo, target, caminho_csv="./data/results/resultados_finais.csv"):
-    registros = []
-    for tecnica, dados in resultados.items():
-        y_real = dados['y_real']
-        previsoes = dados['previsoes']
-        probabilidades = dados['probabilidades']
-
-        if len(set(y_real)) < 2:
-            acuracia = float('nan')
-            precision = float('nan')
-        else:
-            acuracia = accuracy_score(y_real, previsoes)
-            precision = precision_score(y_real, previsoes)
-
-        print(f'\033[4mJanela {janela} - {tecnica}\033[0m')
-        print(f'Acurácia: {acuracia:.2f}')
-        print(f'Precisão: {precision:.2f}')
-        print(f'Previsões: {previsoes}')
-        print(f'Valor real: {y_real}')
-        print(f'Probabilidades: {[round(float(p), 2) for p in probabilidades]}\n')
-
-        registros.append({
-            "ativo": ativo,
-            "target": target,
-            "janela": janela,
-            "tecnica": tecnica,
-            "acuracia": acuracia,
-            "precisao": precision
-        })
-
-    os.makedirs(os.path.dirname(caminho_csv), exist_ok=True)
-    if os.path.exists(caminho_csv):
-        df_existente = pd.read_csv(caminho_csv)
-        df_novo = pd.DataFrame(registros)
-        df_final = pd.concat([df_existente, df_novo], ignore_index=True)
-    else:
-        df_final = pd.DataFrame(registros)
-    df_final.to_csv(caminho_csv, index=False)

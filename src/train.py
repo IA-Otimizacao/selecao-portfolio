@@ -7,7 +7,7 @@ warnings.filterwarnings("ignore")
 
 todos = ['PETR4', 'ITUB4', 'VALE3']
 targets = [1.01, 1.015, 1.02]
-janelas_tamanho = [60,75,90]
+janelas_tamanho = [60, 75, 90]
 
 # Hiperparâmetros
 parametros_rna = {
@@ -36,7 +36,8 @@ def main():
     print("\nIniciando modelagem e avaliação...\n")
 
     for file in tqdm(todos, desc="Ativos", unit="ativo"):
-        todos_registros = []
+        todos_registros_out = []
+        todos_registros_in = []
 
         for target in tqdm(targets, desc=f"Targets de {file}", leave=False):
             curated_path = f"./data/curated/{file}_target_{target}.csv"
@@ -49,14 +50,6 @@ def main():
             for janela in tqdm(janelas_tamanho, desc=f"Janelas - {file} T{target}", leave=False):
                 qtd_treinamentos = len(base_dados) - janela - 1
 
-                resultados_acumulados = {
-                    'RNA': {'previsoes': [], 'y_real': [], 'probabilidades': []},
-                    'Random Forest': {'previsoes': [], 'y_real': [], 'probabilidades': []},
-                    'SVC': {'previsoes': [], 'y_real': [], 'probabilidades': []}
-                }
-
-                registros = []
-
                 for i in range(qtd_treinamentos):
                     x_janela_atual = x_dados[i:i+janela]
                     y_janela_atual = y_dados[i:i+janela]
@@ -68,24 +61,24 @@ def main():
                     x_teste = x_dados.iloc[i+janela:i+janela+1]
                     x_teste = x_teste[x_janela_filtrada.columns].values
 
+                    data_inicio_janela = z_dados.at[i, 'Exchange Date']
+                    data_final_janela = z_dados.at[i+janela-1, 'Exchange Date']
                     data_atual = z_dados.at[i+janela+1, 'Exchange Date']
                     resultado_real = z_dados.at[i+janela+1, 'resultado_real']
                     target_real = z_dados.at[i+janela+1, 'target']
                     y_real_atual = y_dados[i+janela+1]
 
-                    resultados_parciais = treinar_e_avaliar(file,
+                    resultados_parciais = treinar_e_avaliar(
+                        file,
                         x_treino, y_treino,
                         x_teste, y_real_atual,
                         parametros_rna, parametros_rf, parametros_svc
                     )
 
                     for modelo in resultados_parciais:
-                        resultados_acumulados[modelo]['previsoes'].extend(resultados_parciais[modelo]['previsoes'])
-                        resultados_acumulados[modelo]['y_real'].extend(resultados_parciais[modelo]['y_real'])
-                        resultados_acumulados[modelo]['probabilidades'].extend(resultados_parciais[modelo]['probabilidades'])
-
+                        # --- OUT-OF-SAMPLE ---
                         for pred, real in zip(resultados_parciais[modelo]['previsoes'], resultados_parciais[modelo]['y_real']):
-                            registros.append({
+                            todos_registros_out.append({
                                 "ativo": file,
                                 "target": target,
                                 "janela": janela,
@@ -96,14 +89,36 @@ def main():
                                 "resultado_real": resultado_real
                             })
 
-                print(f"\nAtivo: {file} - Target: {target} - Janela {janela}")
-                exibir_resultados(resultados_acumulados, janela, file, target, "./data/analytics/results/resultados_finais.csv")
-                todos_registros.extend(registros)
+                        # --- IN-SAMPLE ---
+                        y_treino_vals = list(resultados_parciais[modelo].get('y_treino', []))
+                        y_in_vals = list(resultados_parciais[modelo].get('y_in', []))
+                        precision_in = resultados_parciais[modelo].get('precision_in', None)
 
-        df_registros_ativo = pd.DataFrame(todos_registros)
-        caminho_arquivo = f"./data/train_out/target_previsto_{file}.csv"
-        df_registros_ativo.to_csv(caminho_arquivo, index=False)
-        print(f"\nResultados detalhados de {file} salvos em {caminho_arquivo}")
+                        todos_registros_in.append({
+                            "ativo": file,
+                            "target": target,
+                            "janela": janela,
+                            "data_inicio_janela": data_inicio_janela,
+                            "data_final_janela": data_final_janela,
+                            "tecnica": modelo,
+                            "y_treino": y_treino_vals,
+                            "y_in": y_in_vals,
+                            "precision": precision_in
+                        })
+
+                print(f"\nAtivo: {file} - Target: {target} - Janela {janela}")
+
+        # Salvar OUT-OF-SAMPLE
+        df_out = pd.DataFrame(todos_registros_out)
+        caminho_out = f"./data/train_out/outputs/target_previsto_{file}.csv"
+        df_out.to_csv(caminho_out, index=False)
+        print(f"Resultados out-of-sample salvos em {caminho_out}")
+
+        # Salvar IN-SAMPLE
+        df_in = pd.DataFrame(todos_registros_in)
+        caminho_in = f"./data/train_out/inputs/target_in_{file}.csv"
+        df_in.to_csv(caminho_in, index=False)
+        print(f"Resultados in-sample salvos em {caminho_in}")
 
     print("\nModelagem concluída!")
 
