@@ -150,14 +150,10 @@ def calcular_target(base_dados, target, janela_temporal):
         compra = base_dados.at[i, 'compra']
         for j in range(1, janela_temporal + 1):
             if base_dados.at[i + j, 'High'] >= compra * target:
-                base_dados.at[i, 'venda'] = base_dados.at[i + j, 'High']
+                base_dados.at[i, 'venda'] = compra * target
                 base_dados.at[i, 'target'] = 1
                 break
-    base_dados['resultado_real'] = np.where(
-        base_dados['target'] == 1,
-        (base_dados['maximo'] / base_dados['compra']) - 1,
-        (base_dados['venda'] / base_dados['compra']) - 1
-    )
+    base_dados['resultado_real'] = (base_dados['venda'] / base_dados['compra']) - 1
     return base_dados
 
 

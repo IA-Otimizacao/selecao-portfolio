@@ -23,8 +23,8 @@ def main():
     ibov_status = carregar_ibov(ibov)
     base_petr4 = carregar_dados('PETR4')
 
-    os.makedirs("./data/raw/ibov_status", exist_ok=True)
-    os.makedirs("./data/curated", exist_ok=True)
+    os.makedirs("./data/pre_process/raw/ibov_status", exist_ok=True)
+    os.makedirs("./data/pre_process/curated", exist_ok=True)
 
     print("\n Iniciando processamento e salvamento em curated...\n")
 
@@ -49,10 +49,10 @@ def main():
             base_dados = calcular_target(base_dados, target, janela_temporal)
             base_dados = base_dados.iloc[14:]
 
-            curated_path = f"./data/curated/{file}_target_{target}.csv"
+            curated_path = f"./data/pre_process/curated/{file}_target_{target}.csv"
             base_dados.to_csv(curated_path, index=False)
 
-    print("\nProcessamento inicial finalizado! Dados salvos em ./data/curated.")
+    print("\nProcessamento inicial finalizado! Dados salvos em ./data/pre_process/curated.")
 
 if __name__ == "__main__":
     main()
