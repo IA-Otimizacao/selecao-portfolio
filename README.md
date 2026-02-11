@@ -59,12 +59,12 @@ src/
 │
 ├── utils.py                 # Funções utilitárias
 └── plot.py                  # Geração de gráficos
-
-
+```
 ---
 
 ## 📁 Estrutura de Diretórios – Dados
 
+```
 data/
 ├── pre_process/                    # Dados brutos, sem qualquer tratamento
 │   ├── ibov/
@@ -84,18 +84,21 @@ data/
     ├── 5__6_completo/
     └── 7_monetario/
 
-
+```
 ---
 
 ## ▶️ Como executar
 🔹 Execução completa (recomendada)
+```
 python -m src.main
+```
 
 🔹 Execução por etapa
+```
 python -m src.motor.pre_process
 python -m src.motor.train
 python -m src.motor.ensemble
-
+```
 
 ---
 
