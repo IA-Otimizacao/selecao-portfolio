@@ -1,52 +1,101 @@
-# Projeto de Seleção de Portfólios
+# 📈 Portfolio Selection & Investment Strategy Simulator
 
-Este repositório contém scripts e dados para tratamento, modelagem, simulação e visualização de estratégias de investimento na B3, incluindo análise de performance de modelos de classificação e simulação de capital ao longo do tempo.
+Pipeline completo para **modelagem preditiva**, **ensemble de classificadores** e **simulação monetária de estratégias de investimento** no mercado brasileiro (B3).
 
----
-
-## 📂 Estrutura de Pastas
-
-### 1. Scripts (`./src/`)
-
-| Script | Descrição | Ordem de execução |
-|--------|-----------|-----------------|
-| `utils.py` | Funções utilitárias usadas em todo o projeto | 1 |
-| `train.py` | Tratamento de dados e treinamento dos modelos de classificação | 2 |
-| `monetary.py` | Implementa simulação de capital e janelas de investimento com base nos resultados do modelo | 3 |
-| `plot_monetario.py` | Gera gráficos da evolução do valor obtido ao longo do tempo, separando por ativo, target, janela e técnica | 4 |
-
-> ⚠️ É importante executar os scripts na ordem acima para garantir que os dados e resultados necessários estejam disponíveis para os próximos passos.
+O projeto transforma dados financeiros brutos em **decisões de investimento simuladas**, permitindo comparar diferentes estratégias a partir da **evolução do capital ao longo do tempo**.
 
 ---
 
-### 2. Dados (`./data/`)
+## 🚀 O que esse projeto faz
 
-| Pasta | Descrição |
-|-------|-----------|
-| `ibov` | Ativos presentes no Ibovespa ao longo do tempo |
-| `raw/refinitiv` | Dados brutos retirados diretamente do software Refinitiv |
-| `raw/ibov_status` | Dados brutos com alinhamento de série temporal e inclusão do status de presença no Ibovespa |
-| `curated` | Dados tratados e preparados com variáveis de treinamento e auxiliares |
-| `train_out` | Dados pós-treinamento com a coluna binária resultante da classificação |
-| `monetario` | Dados simulados relativos ao capital de investimento e janelas |
-| `analytics/results` | Resultados de métricas de acurácia, precisão e outras análises dos modelos treinados |
+✔️ Processa dados financeiros históricos  
+✔️ Treina modelos de machine learning para previsão de alvos de retorno  
+✔️ Combina modelos usando diferentes técnicas de ensemble  
+✔️ Simula estratégias de investimento com janelas temporais fixas  
+✔️ Gera curvas de capital para comparação entre estratégias  
+
+Tudo de forma **modular**, **reprodutível** e **automatizada**.
 
 ---
 
-### 3. Gráficos (`./src/visualization/`)
+## 🧠 Ideia central
 
-| Tipo | Descrição |
-|------|-----------|
-| Plot do saldo simulado | Evolução do valor obtido em relação ao capital inicial ao longo do tempo, separados por ativo e target, com diferentes linhas para cada combinação de janela e técnica |
+A cada janela de tempo, o sistema decide:
+
+- **Encerrar a operação antecipadamente**, caso um sinal binário seja ativado, ou
+- **Manter até o final da janela**, usando o retorno real observado
+
+O capital é atualizado de forma **multiplicativa**, permitindo analisar:
+- crescimento acumulado  
+- estabilidade da estratégia  
+- impacto de diferentes sinais preditivos  
 
 ---
 
-## 🚀 Ordem sugerida de execução
+## 🗂️ Estrutura do Projeto
 
-1. Garantir que os dados brutos estejam em `./data/raw/`  
-2. Executar `train.py` → gera dados tratados (`curated`) e saída do modelo (`train_out`)  
-3. Executar `monetary.py` → gera simulações de capital em `./data/monetario/`  
-4. Executar `plot_monetario.py` → gera gráficos em `./src/visualization/`  
+```text
+src/
+├── main.py                  # Orquestrador principal do pipeline
+│
+├── motor/                   # Pipelines de alto nível
+│   ├── pre_process.py       # Pré-processamento de dados
+│   ├── train.py             # Treinamento e avaliação de modelos
+│   └── ensemble.py          # Ensemble + simulação monetária
+│
+├── pre_process/             # Tratamento e preparação dos dados
+│   ├── xlsx_to_csv.py
+│   ├── ibov.py
+│   └── inputs.py
+│
+├── ensemble/                # Técnicas de ensemble e análises
+│   ├── comparison_tec_1.py
+│   ├── comparison_jan_2.py
+│   ├── comparison_prec_3.py
+│   ├── comparison_esmbs_4.py
+│   ├── acuracia_precision_5.py
+│   ├── completo_6.py
+│   └── monetary_7.py
+│
+├── utils.py                 # Funções utilitárias
+└── plot.py                  # Geração de gráficos
+
+
+---
+
+## 📁 Estrutura de Diretórios – Dados
+
+data/
+├── pre_process/                    # Dados brutos, sem qualquer tratamento
+│   ├── ibov/
+│   ├── raw/
+│   └── curated/
+│
+├── train/              # Dados tratados e prontos para uso
+│   ├── analytics/
+│   ├── inputs/
+│   └── outputs/
+│
+└──ensemble/               # Resultados e análises dos modelos ensemble
+    ├── 1_comparison/
+    ├── 2_tot_par/
+    ├── 3_precision/
+    ├── 4_melhor_precision_valor/
+    ├── 5__6_completo/
+    └── 7_monetario/
+
+
+---
+
+## ▶️ Como executar
+🔹 Execução completa (recomendada)
+python -m src.main
+
+🔹 Execução por etapa
+python -m src.motor.pre_process
+python -m src.motor.train
+python -m src.motor.ensemble
+
 
 ---
 
