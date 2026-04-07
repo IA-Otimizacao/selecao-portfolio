@@ -70,8 +70,6 @@ def gerar_comparacao_completa(
                 'ativo',          # ativo financeiro
                 'target',         # target analisado
                 'data',           # data da observação
-                'target_real',    # resultado real observado
-                'resultado_real', # resultado financeiro real
                 'esmble_jan_tot', # ensemble com concordância total
                 'esmble_jan_par', # ensemble com concordância parcial
                 'in_precision'    # decisão baseada na melhor precision

@@ -69,9 +69,10 @@ def xlsx_to_csv():
 
                 # Converte a coluna para formato datetime
                 df["Exchange Date"] = pd.to_datetime(df["Exchange Date"], errors="coerce")
-
+                inicio = "01-01-2020"
+                fim = "01-04-2020"
                 # Filtra os dados
-                df = filtrar_intervalo(df, "01-01-2020", "01-01-2023")
+                df = filtrar_intervalo(df, inicio, fim)
 
                 # Formata as datas para o padrão
                 df["Exchange Date"] = df["Exchange Date"].apply(formatar_data)

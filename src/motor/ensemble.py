@@ -4,8 +4,10 @@ from src.ensemble.comparison_prec_3 import run_comparison_precision
 from src.ensemble.comparison_esmbs_4 import run_comparison_esmbs
 from src.ensemble.acuracia_precision_5 import run_acuracia_precision
 from src.ensemble.completo_6 import gerar_comparacao_completa
-from src.ensemble.monetary_7 import run_monetary
-from src.plot import gerar_graficos_capital
+from src.ensemble.juncao_intrumentos_7 import run_join_intr
+from src.ensemble.calculo_invest_8 import run_invest
+from src.ensemble.capital_9 import run_calculo_capital
+
 
 def run_ensemble():
     print("\n🚀 Iniciando pipeline de ENSEMBLE\n")
@@ -16,8 +18,10 @@ def run_ensemble():
     run_comparison_esmbs()
     run_acuracia_precision()
     gerar_comparacao_completa()
-    run_monetary()
-    gerar_graficos_capital()
+    run_join_intr()
+    run_invest()
+    run_calculo_capital()
+
 
     print("\n✅ Pipeline de ensemble finalizado com sucesso!")
 
