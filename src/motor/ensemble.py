@@ -7,6 +7,7 @@ from src.ensemble.completo_6 import gerar_comparacao_completa
 from src.ensemble.juncao_intrumentos_7 import run_join_intr
 from src.ensemble.calculo_invest_8 import run_invest
 from src.ensemble.capital_9 import run_calculo_capital
+from src.ensemble.juncao_ativos_10 import run_df_por_target
 
 
 def run_ensemble():
@@ -21,6 +22,7 @@ def run_ensemble():
     run_join_intr()
     run_invest()
     run_calculo_capital()
+    run_df_por_target()
 
 
     print("\n✅ Pipeline de ensemble finalizado com sucesso!")
