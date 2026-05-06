@@ -1,52 +1,82 @@
 import pandas as pd
 import os
+import re
 
 
 def run_acuracia_precision():
 
-    todos = ['PETR4','ITUB4','VALE3']
-
     os.makedirs("./data/train/analytics", exist_ok=True)
+
+    # =========================
+    # PEGA ATIVOS DAS DUAS PASTAS
+    # =========================
+    pasta_m = "./data/ensemble/4_melhor_precision_valor/"
+    pasta_e = "./data/ensemble/2_tot_par/"
+
+    arquivos_m = [
+        f for f in os.listdir(pasta_m)
+        if f.endswith("_melhor_precision_valor.csv")
+    ]
+
+    arquivos_e = [
+        f for f in os.listdir(pasta_e)
+        if f.endswith("_ensemble_jan_tot_e_parcial.csv")
+    ]
+
+    ativos_m = {
+        re.search(r"(.*)_melhor_precision_valor\.csv", f).group(1)
+        for f in arquivos_m
+    }
+
+    ativos_e = {
+        re.search(r"(.*)_ensemble_jan_tot_e_parcial\.csv", f).group(1)
+        for f in arquivos_e
+    }
+
+    # interseção → só roda onde existe nos dois
+    todos = list(ativos_m & ativos_e)
 
     res = []
 
-    # Loop pelos ativos
+    # =========================
+    # LOOP PRINCIPAL
+    # =========================
     for file in todos:
 
-        # Dataset que contém: valor previsto pelas técnicas com melhor precision e concordância entre essas técnicas
         df_m = pd.read_csv(
-            f"./data/ensemble/4_melhor_precision_valor/{file}_melhor_precision_valor.csv"
+            f"{pasta_m}{file}_melhor_precision_valor.csv"
         )
 
-        # Dataset que contém: resultados dos ensembles de janelas (total e parcial) e target real e resultado real
         df_e = pd.read_csv(
-            f"./data/ensemble/2_tot_par/{file}_ensemble_jan_tot_e_parcial.csv"
+            f"{pasta_e}{file}_ensemble_jan_tot_e_parcial.csv"
         )
 
-        # Merge para juntar as previsões com o target real, usando como chave: ativo + target + data
+        # garante consistência de data (evita erro silencioso no merge)
+        if 'data' in df_m.columns:
+            df_m['data'] = pd.to_datetime(df_m['data'], errors='coerce')
+
+        if 'data' in df_e.columns:
+            df_e['data'] = pd.to_datetime(df_e['data'], errors='coerce')
+
         df = pd.merge(
 
-            # Dataset com o valor previsto pelas técnicas de melhor precision
             df_m[['ativo','target','data','concordancia_valor']]
             .rename(columns={'concordancia_valor':'in_precision'}),
 
-            # Dataset com os resultados dos ensembles
             df_e[['ativo','target','data','target_real','resultado_real',
                   'esmble_jan_tot','esmble_jan_par']],
 
-            # Chaves usadas para unir os dados
             on=['ativo','target','data']
         )
 
-        # Cálculo da acurácia: Para cada modelo de decisão, calcula a acurácia comparando a previsão com o target real
         for col in ['in_precision','esmble_jan_tot','esmble_jan_par']:
 
             acc = (df[col] == df['target_real']).mean() * 100
 
             res.append({
-                'ativo': file,     # ativo analisado
-                'modelo': col,     # modelo/estratégia
-                'acc': round(acc,2) # acurácia arredondada
+                'ativo': file,
+                'modelo': col,
+                'acc': round(acc, 2)
             })
 
     pd.DataFrame(res).to_csv(

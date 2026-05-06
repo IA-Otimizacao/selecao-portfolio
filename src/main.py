@@ -9,7 +9,7 @@ def main():
     # -----------------------------
     # 1️⃣ Pré-processamento
     # -----------------------------
-    run_pre_process()
+    # run_pre_process()
 
     # -----------------------------
     # 2️⃣ Treinamento
@@ -19,7 +19,7 @@ def main():
     # -----------------------------
     # 3️⃣ Ensemble + monetário
     # -----------------------------
-    run_ensemble()
+    # run_ensemble()
 
     print("\n🏁 PIPELINE FINALIZADO COM SUCESSO 🏁")
 

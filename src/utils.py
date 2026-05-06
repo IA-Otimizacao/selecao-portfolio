@@ -22,7 +22,8 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.feature_selection import VarianceThreshold
 from feature_engine.selection import DropCorrelatedFeatures
 
-
+# ================= CACHE GRIDSEARCH =================
+melhores_params_cache = {}
 # ======================================================
 # DECORATOR PARA MEDIR TEMPO DE EXECUÇÃO
 # ======================================================
@@ -56,19 +57,24 @@ def medir_tempo(func):
 # ======================================================
 # FUNÇÃO PARA CARREGAR DADOS DOS ATIVOS
 # ======================================================
-def carregar_dados(file):
+def carregar_dados(file, base_path="./data/pre_process/raw/refinitiv"):
+    
     try:
         locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
     except:
         pass
 
-    # Lê arquivo CSV do Refinitiv
-    base_dados = pd.read_csv(f'./data/raw/refinitiv/{file}.csv')
+    # Se já vier com .csv, não adiciona
+    if file.endswith(".csv"):
+        path = file
+    else:
+        path = os.path.join(base_path, f"{file}.csv")
 
-    # Remove pontos e espaços da coluna de data
-    base_dados['Exchange Date'] = base_dados['Exchange Date'].str.replace('.', '', regex=False).str.strip()
+    base_dados = pd.read_csv(path)
 
-    # Converte coluna de data para datetime
+    base_dados['Exchange Date'] = base_dados['Exchange Date'] \
+        .str.replace('.', '', regex=False).str.strip()
+
     base_dados['Exchange Date'] = pd.to_datetime(
         base_dados['Exchange Date'],
         format='%d-%b-%Y',
@@ -84,7 +90,7 @@ def carregar_dados(file):
 def carregar_ibov(ibov):
 
     # Lê planilha contendo status dos ativos no índice
-    ibov_status = pd.read_excel(f'./data/ibov/{ibov}.xlsx')
+    ibov_status = pd.read_excel(f'./data/pre_process/ibov/{ibov}.xlsx')
 
     # Converte datas
     ibov_status['Exchange Date'] = pd.to_datetime(ibov_status['Exchange Date'])
@@ -334,208 +340,101 @@ def calcular_target(base_dados, target, janela_temporal):
 # ======================================================
 @medir_tempo
 def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
-                      parametros_rna, parametros_rf, parametros_svc):
+                      parametros_rna, parametros_rf, parametros_svc,
+                      ano_atual=None, janela=None):
 
-    """
-    Esta função treina e avalia três algoritmos de Machine Learning
-    utilizados para prever se uma operação de trade atingirá ou não
-    o target de lucro definido.
-
-    Modelos utilizados:
-    • Rede Neural (MLPClassifier)
-    • Random Forest
-    • Support Vector Classifier (SVC)
-
-    A função executa as seguintes etapas:
-
-    1) Normalização das variáveis explicativas
-    2) Busca dos melhores hiperparâmetros com GridSearchCV
-    3) Treinamento do melhor modelo encontrado
-    4) Avaliação IN-SAMPLE (dados de treino)
-    5) Previsão OUT-OF-SAMPLE (dados de teste)
-
-    ----------------------------------------------------------------
-
-    Parâmetros de entrada:
-
-    file
-        Nome do ativo sendo analisado (PETR4, ITUB4, VALE3).
-
-    x_treino
-        Variáveis explicativas do conjunto de treinamento.
-
-    y_treino
-        Variável alvo (target) do conjunto de treinamento.
-
-    x_teste
-        Observação futura utilizada para previsão.
-
-    y_teste_real
-        Resultado real observado no período de teste.
-
-    parametros_rna / parametros_rf / parametros_svc
-        Dicionários contendo os hiperparâmetros utilizados
-        na busca via GridSearchCV.
-
-    ----------------------------------------------------------------
-
-    Retorno:
-
-    Um dicionário contendo:
-
-    • previsões out-of-sample
-    • valores reais
-    • previsões in-sample
-    • valores reais do treino
-    • precision in-sample
-    """
-
-    # ESTRUTURA PARA ARMAZENAR RESULTADOS
     resultados = {
         'RNA': {'previsoes': [], 'y_real': [], 'y_treino': [], 'y_in': [], 'precision_in': None},
         'Random Forest': {'previsoes': [], 'y_real': [], 'y_treino': [], 'y_in': [], 'precision_in': None},
         'SVC': {'previsoes': [], 'y_real': [], 'y_treino': [], 'y_in': [], 'precision_in': None}
     }
 
-    # Cada modelo armazenará:
-    #
-    # previsoes → previsão feita para o dado de teste
-    # y_real → valor real observado
-    # y_in → previsões feitas nos dados de treino
-    # y_treino → valores reais do treino
-    # precision_in → precisão do modelo no treino
+    scaler = StandardScaler()
+    x_treino = scaler.fit_transform(x_treino)
+    x_teste = scaler.transform(x_teste)
 
-    # Normalização dos dados
-    scaler_dados = StandardScaler()
+    # ================= RNA =================
+    chave = (file, 'RNA', ano_atual, janela)
 
-    # Ajusta o scaler usando apenas os dados de treino
-    x_treino_normalizado = scaler_dados.fit_transform(x_treino)
+    if len(np.unique(y_treino)) >= 2:
 
-    # Aplica a mesma transformação nos dados de teste
-    x_teste_normalizado = scaler_dados.transform(x_teste)
+        if chave not in melhores_params_cache:
 
-    # ==================================================
-    # MODELO 1 - REDE NEURAL
-    # ==================================================
+            print(f"🔍 GridSearch RNA ({ano_atual})")
 
-    if len(np.unique(y_treino)) < 2:
+            model = MLPClassifier(max_iter=300)
 
-        print("⚠️ RNA ignorada: apenas uma classe presente nos dados.")
+            grid = GridSearchCV(model, parametros_rna, cv=3, scoring='accuracy')
+            grid.fit(x_treino, y_treino)
 
-    else:
+            melhores_params_cache[chave] = grid.best_estimator_.get_params()
 
-        rna = MLPClassifier(max_iter=300)
+        model = MLPClassifier(**melhores_params_cache[chave])
+        model.fit(x_treino, y_treino)
 
-        # Busca dos melhores hiperparâmetros
-        grid_rna = GridSearchCV(
-            rna,
-            parametros_rna,
-            cv=3,
-            scoring='accuracy'
-        )
-
-        # Treina todos os modelos do grid
-        grid_rna.fit(x_treino_normalizado, y_treino)
-
-        # Seleciona o melhor modelo encontrado
-        melhor_rna = grid_rna.best_estimator_
-
-        # Treina novamente o melhor modelo
-        melhor_rna.fit(x_treino_normalizado, y_treino)
-
-        # AVALIAÇÃO IN-SAMPLE
-        # Previsões feitas sobre os próprios dados de treino
-        y_in_rna = melhor_rna.predict(x_treino_normalizado)
-
-        # Precision mede: entre todas as previsões positivas feitas pelo modelo, quantas realmente estavam corretas.
-        precision_in_rna = precision_score(y_treino, y_in_rna, zero_division=0)
-
-        resultados['RNA']['y_in'] = list(y_in_rna)
+        y_in = model.predict(x_treino)
+        resultados['RNA']['y_in'] = list(y_in)
         resultados['RNA']['y_treino'] = list(y_treino)
-        resultados['RNA']['precision_in'] = precision_in_rna
+        resultados['RNA']['precision_in'] = precision_score(y_treino, y_in, zero_division=0)
 
-        # PREVISÃO OUT-OF-SAMPLE
-
-        # O modelo recebe uma observação nova e prevê se o target será atingido ou não.
-        y_previsao_rna = melhor_rna.predict(x_teste_normalizado)
-
-        resultados['RNA']['previsoes'].append(int(y_previsao_rna[0]))
+        pred = model.predict(x_teste)
+        resultados['RNA']['previsoes'].append(int(pred[0]))
         resultados['RNA']['y_real'].append(int(y_teste_real))
 
-    # ==================================================
-    # MODELO 2 - RANDOM FOREST
-    # ==================================================
+    # ================= RF =================
+    chave = (file, 'RF', ano_atual, janela)
 
-    if len(np.unique(y_treino)) < 2:
+    if len(np.unique(y_treino)) >= 2:
 
-        print("⚠️ Random Forest ignorada.")
+        if chave not in melhores_params_cache:
 
-    else:
+            print(f"🔍 GridSearch RF ({ano_atual})")
 
-        rf = RandomForestClassifier(random_state=42)
+            model = RandomForestClassifier(random_state=42)
 
-        grid_rf = GridSearchCV(
-            rf,
-            parametros_rf,
-            cv=3,
-            scoring='accuracy'
-        )
+            grid = GridSearchCV(model, parametros_rf, cv=3, scoring='accuracy')
+            grid.fit(x_treino, y_treino)
 
-        grid_rf.fit(x_treino_normalizado, y_treino)
+            melhores_params_cache[chave] = grid.best_estimator_.get_params()
 
-        melhor_rf = grid_rf.best_estimator_
+        model = RandomForestClassifier(**melhores_params_cache[chave])
+        model.fit(x_treino, y_treino)
 
-        melhor_rf.fit(x_treino_normalizado, y_treino)
-
-        y_in_rf = melhor_rf.predict(x_treino_normalizado)
-
-        precision_in_rf = precision_score(y_treino, y_in_rf, zero_division=0)
-
-        resultados['Random Forest']['y_in'] = list(y_in_rf)
+        y_in = model.predict(x_treino)
+        resultados['Random Forest']['y_in'] = list(y_in)
         resultados['Random Forest']['y_treino'] = list(y_treino)
-        resultados['Random Forest']['precision_in'] = precision_in_rf
+        resultados['Random Forest']['precision_in'] = precision_score(y_treino, y_in, zero_division=0)
 
-        y_previsao_rf = melhor_rf.predict(x_teste_normalizado)
-
-        resultados['Random Forest']['previsoes'].append(int(y_previsao_rf[0]))
+        pred = model.predict(x_teste)
+        resultados['Random Forest']['previsoes'].append(int(pred[0]))
         resultados['Random Forest']['y_real'].append(int(y_teste_real))
 
-    # ==================================================
-    # MODELO 3 - SVC
-    # ==================================================
+    # ================= SVC =================
+    chave = (file, 'SVC', ano_atual, janela)
 
-    if len(np.unique(y_treino)) < 2:
+    if len(np.unique(y_treino)) >= 2:
 
-        print("⚠️ SVC ignorado.")
+        if chave not in melhores_params_cache:
 
-    else:
+            print(f"🔍 GridSearch SVC ({ano_atual})")
 
-        svc = SVC(random_state=42)
+            model = SVC()
 
-        grid_svc = GridSearchCV(
-            svc,
-            parametros_svc,
-            cv=3,
-            scoring='accuracy'
-        )
+            grid = GridSearchCV(model, parametros_svc, cv=3, scoring='accuracy')
+            grid.fit(x_treino, y_treino)
 
-        grid_svc.fit(x_treino_normalizado, y_treino)
+            melhores_params_cache[chave] = grid.best_estimator_.get_params()
 
-        melhor_svc = grid_svc.best_estimator_
+        model = SVC(**melhores_params_cache[chave])
+        model.fit(x_treino, y_treino)
 
-        melhor_svc.fit(x_treino_normalizado, y_treino)
-
-        y_in_svc = melhor_svc.predict(x_treino_normalizado)
-
-        precision_in_svc = precision_score(y_treino, y_in_svc, zero_division=0)
-
-        resultados['SVC']['y_in'] = list(y_in_svc)
+        y_in = model.predict(x_treino)
+        resultados['SVC']['y_in'] = list(y_in)
         resultados['SVC']['y_treino'] = list(y_treino)
-        resultados['SVC']['precision_in'] = precision_in_svc
+        resultados['SVC']['precision_in'] = precision_score(y_treino, y_in, zero_division=0)
 
-        y_previsao_svc = melhor_svc.predict(x_teste_normalizado)
-
-        resultados['SVC']['previsoes'].append(int(y_previsao_svc[0]))
+        pred = model.predict(x_teste)
+        resultados['SVC']['previsoes'].append(int(pred[0]))
         resultados['SVC']['y_real'].append(int(y_teste_real))
 
     return resultados

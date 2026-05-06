@@ -1,6 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 import os
+import re
 
 
 def gerar_comparacao_completa(
@@ -9,53 +10,71 @@ def gerar_comparacao_completa(
     path_saida="./data/ensemble/5_6_completo"
 ):
     """
-    Função responsável por gerar um dataset final de comparação
-    entre diferentes estratégias de decisão.
-
-    Ela une:
-    - os resultados dos ensembles de janelas
-    - o resultado baseado na melhor precision
-
-    O objetivo é centralizar todas as estratégias em um único dataset
-    para facilitar análises e comparação de performance.
-
-    Parâmetros:
-    path_ensemble -> pasta onde estão os arquivos de ensemble
-    path_precision -> pasta onde estão os arquivos de melhor precision
-    path_saida -> pasta onde será salvo o dataset final
+    Gera dataset final consolidando:
+    - ensemble total
+    - ensemble parcial
+    - estratégia baseada em precision
     """
 
-    ativos = ['PETR4', 'ITUB4', 'VALE3']
     os.makedirs(path_saida, exist_ok=True)
 
-    # Loop pelos ativos
-    for ativo in tqdm(ativos):
+    # =========================
+    # PEGA ATIVOS DAS DUAS PASTAS
+    # =========================
+    arquivos_ens = [
+        f for f in os.listdir(path_ensemble)
+        if f.endswith("_ensemble_jan_tot_e_parcial.csv")
+    ]
 
-        # Dataset contendo os resultados dos ensembles (ensemble total e ensemble parcial)
+    arquivos_prec = [
+        f for f in os.listdir(path_precision)
+        if f.endswith("_melhor_precision_valor.csv")
+    ]
+
+    ativos_ens = {
+        re.search(r"(.*)_ensemble_jan_tot_e_parcial\.csv", f).group(1)
+        for f in arquivos_ens
+    }
+
+    ativos_prec = {
+        re.search(r"(.*)_melhor_precision_valor\.csv", f).group(1)
+        for f in arquivos_prec
+    }
+
+    # interseção → só roda onde existe nos dois
+    ativos = list(ativos_ens & ativos_prec)
+
+    # =========================
+    # LOOP PRINCIPAL
+    # =========================
+    for ativo in tqdm(ativos, desc="Ativos"):
+
         df_ens = pd.read_csv(
             f"{path_ensemble}/{ativo}_ensemble_jan_tot_e_parcial.csv"
         )
 
-        # Dataset contendo os resultados da estratégia baseada nas técnicas com maior precision
         df_prec = pd.read_csv(
             f"{path_precision}/{ativo}_melhor_precision_valor.csv"
         )
 
-        # Garantia de consistência nos tipos das colunas
+        # =========================
+        # GARANTE CONSISTÊNCIA
+        # =========================
         for col in ['ativo', 'target', 'data']:
-
             df_ens[col] = df_ens[col].astype(str)
             df_prec[col] = df_prec[col].astype(str)
 
-        # Seleção e renomeação da coluna de interesse
-        # Do dataset de precision, mantemos apenas: ativo, target, data e concordancia_valor
+        # =========================
+        # PREPARA DATASET DE PRECISION
+        # =========================
         df_prec = (
             df_prec[['ativo', 'target', 'data', 'concordancia_valor']]
             .rename(columns={'concordancia_valor': 'in_precision'})
         )
 
-
-        # Merge dos datasets. Realiza a junção dos dois datasets usando como chave: ativo + target + data
+        # =========================
+        # MERGE
+        # =========================
         df_final = df_ens.merge(
             df_prec,
             on=['ativo', 'target', 'data'],
@@ -63,16 +82,17 @@ def gerar_comparacao_completa(
             validate='one_to_one'
         )
 
-
-        # Seleção das colunas finais
+        # =========================
+        # COLUNAS FINAIS
+        # =========================
         df_final = df_final[
             [
-                'ativo',          # ativo financeiro
-                'target',         # target analisado
-                'data',           # data da observação
-                'esmble_jan_tot', # ensemble com concordância total
-                'esmble_jan_par', # ensemble com concordância parcial
-                'in_precision'    # decisão baseada na melhor precision
+                'ativo',
+                'target',
+                'data',
+                'esmble_jan_tot',
+                'esmble_jan_par',
+                'in_precision'
             ]
         ]
 
@@ -81,3 +101,5 @@ def gerar_comparacao_completa(
             index=False,
             sep="|"
         )
+
+    print("✅ comparacao_completa concluído")

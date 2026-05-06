@@ -8,6 +8,8 @@ from src.ensemble.juncao_intrumentos_7 import run_join_intr
 from src.ensemble.calculo_invest_8 import run_invest
 from src.ensemble.capital_9 import run_calculo_capital
 from src.ensemble.juncao_ativos_10 import run_df_por_target
+from src.ensemble.target_tecnica_11 import separar_por_tecnica
+from src.ensemble.n import processar_estrategia
 
 
 def run_ensemble():
@@ -23,6 +25,9 @@ def run_ensemble():
     run_invest()
     run_calculo_capital()
     run_df_por_target()
+    separar_por_tecnica()
+    # processar_estrategia()
+
 
 
     print("\n✅ Pipeline de ensemble finalizado com sucesso!")
