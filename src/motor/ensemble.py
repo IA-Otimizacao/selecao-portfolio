@@ -26,7 +26,7 @@ def run_ensemble():
     run_calculo_capital()
     run_df_por_target()
     separar_por_tecnica()
-    # processar_estrategia()
+    processar_estrategia()
 
 
 

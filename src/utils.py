@@ -4,7 +4,9 @@ import talib
 import warnings
 import time
 import os
-import locale
+import json
+
+LOG_TEMPO_FUNCOES = False
 
 # Modelos e ferramentas de ML
 from sklearn.preprocessing import StandardScaler
@@ -20,10 +22,84 @@ from sklearn.model_selection import GridSearchCV
 
 # Seleção de features
 from sklearn.feature_selection import VarianceThreshold
-from feature_engine.selection import DropCorrelatedFeatures
 
 # ================= CACHE GRIDSEARCH =================
-melhores_params_cache = {}
+PARAMS_CACHE_PATH = "./data/train/params_cache.json"
+
+
+def chave_cache_para_texto(chave):
+    return json.dumps(list(chave), ensure_ascii=False)
+
+
+def chave_cache_para_tuple(chave):
+    return tuple(json.loads(chave))
+
+
+def valor_json_seguro(valor):
+    if valor is None or isinstance(valor, (str, int, float, bool)):
+        return valor
+
+    if isinstance(valor, np.generic):
+        return valor.item()
+
+    if isinstance(valor, tuple):
+        return [valor_json_seguro(item) for item in valor]
+
+    if isinstance(valor, list):
+        return [valor_json_seguro(item) for item in valor]
+
+    if isinstance(valor, dict):
+        return {
+            str(chave): valor_json_seguro(item)
+            for chave, item in valor.items()
+        }
+
+    return str(valor)
+
+
+def normalizar_params_modelo(params):
+    params = params.copy()
+
+    if isinstance(params.get("hidden_layer_sizes"), list):
+        params["hidden_layer_sizes"] = tuple(params["hidden_layer_sizes"])
+
+    return params
+
+
+def carregar_params_cache():
+    if not os.path.exists(PARAMS_CACHE_PATH):
+        return {}
+
+    try:
+        with open(PARAMS_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        print("⚠️ Cache de parâmetros inválido. Recriando cache.")
+        return {}
+
+    return {
+        chave_cache_para_tuple(chave): normalizar_params_modelo(params)
+        for chave, params in cache.items()
+    }
+
+
+def salvar_params_cache():
+    os.makedirs(os.path.dirname(PARAMS_CACHE_PATH), exist_ok=True)
+
+    cache = {
+        chave_cache_para_texto(chave): valor_json_seguro(params)
+        for chave, params in melhores_params_cache.items()
+    }
+
+    caminho_temporario = f"{PARAMS_CACHE_PATH}.tmp"
+
+    with open(caminho_temporario, "w") as f:
+        json.dump(cache, f, indent=2)
+
+    os.replace(caminho_temporario, PARAMS_CACHE_PATH)
+
+
+melhores_params_cache = carregar_params_cache()
 # ======================================================
 # DECORATOR PARA MEDIR TEMPO DE EXECUÇÃO
 # ======================================================
@@ -46,8 +122,9 @@ def medir_tempo(func):
         # Calcula duração
         duracao = fim - inicio
 
-        # Exibe tempo no terminal
-        print(f"\033[92m⏱ Função '{func.__name__}' executada em {duracao:.2f} segundos.\033[0m")
+        # Exibe tempo no terminal apenas quando debugging de performance estiver ativo.
+        if LOG_TEMPO_FUNCOES:
+            print(f"\033[92m⏱ Função '{func.__name__}' executada em {duracao:.2f} segundos.\033[0m")
 
         return resultado
 
@@ -57,12 +134,131 @@ def medir_tempo(func):
 # ======================================================
 # FUNÇÃO PARA CARREGAR DADOS DOS ATIVOS
 # ======================================================
+COLUNAS_REFINITIV_NOVAS = {
+    "Date": "Exchange Date",
+    "ACVOL_UNS": "Volume",
+    "OPEN_PRC": "Open",
+    "HIGH_1": "High",
+    "LOW_1": "Low",
+    "TRDPRC_1": "Close",
+}
+
+COLUNAS_REFINITIV_PADRAO = ["Exchange Date", "Close", "Open", "Low", "High", "Volume"]
+
+
+def ler_csv_refinitiv(path):
+    with open(path, "r", encoding="utf-8-sig") as f:
+        primeira_linha = f.readline()
+
+    separador = ";" if primeira_linha.count(";") > primeira_linha.count(",") else ","
+
+    return pd.read_csv(
+        path,
+        sep=separador,
+        encoding="utf-8-sig"
+    )
+
+
+def normalizar_colunas_refinitiv(base_dados):
+    base_dados = base_dados.copy()
+    base_dados.columns = [
+        str(col).strip().replace("\ufeff", "")
+        for col in base_dados.columns
+    ]
+
+    base_dados = base_dados.rename(columns=COLUNAS_REFINITIV_NOVAS)
+    base_dados = base_dados.drop(columns=["BID", "ASK"], errors="ignore")
+
+    colunas_faltantes = [
+        col
+        for col in COLUNAS_REFINITIV_PADRAO
+        if col not in base_dados.columns
+    ]
+
+    if colunas_faltantes:
+        raise ValueError(
+            f"Colunas obrigatórias ausentes no arquivo Refinitiv: {colunas_faltantes}"
+        )
+
+    return base_dados[COLUNAS_REFINITIV_PADRAO].copy()
+
+
+def converter_data_refinitiv(coluna_data):
+    if pd.api.types.is_datetime64_any_dtype(coluna_data):
+        return pd.to_datetime(coluna_data, errors="coerce")
+
+    datas_texto = coluna_data.astype(str).str.strip()
+    datas_texto = datas_texto.replace({
+        "": np.nan,
+        "nan": np.nan,
+        "NaN": np.nan,
+        "NaT": np.nan,
+        "None": np.nan,
+    })
+
+    datas = pd.to_datetime(datas_texto, errors="coerce")
+
+    meses_pt = {
+        "jan": "Jan",
+        "fev": "Feb",
+        "mar": "Mar",
+        "abr": "Apr",
+        "mai": "May",
+        "jun": "Jun",
+        "jul": "Jul",
+        "ago": "Aug",
+        "set": "Sep",
+        "out": "Oct",
+        "nov": "Nov",
+        "dez": "Dec",
+    }
+
+    datas_pt = datas_texto.str.lower().str.replace(".", "", regex=False)
+
+    for mes_pt, mes_en in meses_pt.items():
+        datas_pt = datas_pt.str.replace(
+            f"-{mes_pt}-",
+            f"-{mes_en}-",
+            regex=False
+        )
+
+    datas = datas.fillna(
+        pd.to_datetime(datas_pt, format="%d-%b-%Y", errors="coerce")
+    )
+
+    datas = datas.fillna(
+        pd.to_datetime(datas_texto, dayfirst=True, errors="coerce")
+    )
+
+    return datas
+
+
+def converter_numero_refinitiv(coluna):
+    if pd.api.types.is_numeric_dtype(coluna):
+        return pd.to_numeric(coluna, errors="coerce")
+
+    valores = coluna.astype(str).str.strip()
+    valores = valores.str.replace("\u00a0", "", regex=False)
+    valores = valores.replace({
+        "": np.nan,
+        "nan": np.nan,
+        "NaN": np.nan,
+        "None": np.nan,
+    })
+
+    tem_virgula = valores.str.contains(",", na=False)
+
+    valores.loc[tem_virgula] = (
+        valores.loc[tem_virgula]
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+    )
+
+    return pd.to_numeric(valores, errors="coerce")
+
+
 def carregar_dados(file, base_path="./data/pre_process/raw/refinitiv"):
-    
-    try:
-        locale.setlocale(locale.LC_TIME, 'pt_BR.UTF-8')
-    except:
-        pass
+    file = str(file)
 
     # Se já vier com .csv, não adiciona
     if file.endswith(".csv"):
@@ -70,15 +266,15 @@ def carregar_dados(file, base_path="./data/pre_process/raw/refinitiv"):
     else:
         path = os.path.join(base_path, f"{file}.csv")
 
-    base_dados = pd.read_csv(path)
+    base_dados = ler_csv_refinitiv(path)
 
-    base_dados['Exchange Date'] = base_dados['Exchange Date'] \
-        .str.replace('.', '', regex=False).str.strip()
+    try:
+        base_dados = normalizar_colunas_refinitiv(base_dados)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from exc
 
-    base_dados['Exchange Date'] = pd.to_datetime(
-        base_dados['Exchange Date'],
-        format='%d-%b-%Y',
-        errors='coerce'
+    base_dados['Exchange Date'] = converter_data_refinitiv(
+        base_dados['Exchange Date']
     )
 
     return base_dados
@@ -105,16 +301,10 @@ def padronizar_colunas(base_dados):
 
     for col in base_dados.columns:
 
-        # Se for string, padroniza separadores
-        if base_dados[col].dtype == 'object':
-
-            base_dados[col] = base_dados[col].str.replace('.', '')
-            base_dados[col] = base_dados[col].str.replace(',', '.')
-
         # Converte para número (exceto data)
         if col != 'Exchange Date':
 
-            base_dados[col] = pd.to_numeric(base_dados[col], errors='coerce')
+            base_dados[col] = converter_numero_refinitiv(base_dados[col])
 
     return base_dados
 
@@ -264,6 +454,7 @@ def z_split(base_dados):
 # ======================================================
 @medir_tempo
 def features_selection(x_dados, correlation_threshold=0.8):
+    from feature_engine.selection import DropCorrelatedFeatures
 
     colunas_de_interesse = [
         'r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11',
@@ -353,6 +544,25 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
     x_treino = scaler.fit_transform(x_treino)
     x_teste = scaler.transform(x_teste)
 
+    classes_treino = np.unique(y_treino)
+
+    if len(classes_treino) < 2:
+        pred_constante = int(classes_treino[0])
+        y_in = [pred_constante] * len(y_treino)
+
+        for modelo in resultados:
+            resultados[modelo]['y_in'] = y_in
+            resultados[modelo]['y_treino'] = list(y_treino)
+            resultados[modelo]['precision_in'] = precision_score(
+                y_treino,
+                y_in,
+                zero_division=0
+            )
+            resultados[modelo]['previsoes'].append(pred_constante)
+            resultados[modelo]['y_real'].append(int(y_teste_real))
+
+        return resultados
+
     # ================= RNA =================
     chave = (file, 'RNA', ano_atual, janela)
 
@@ -360,14 +570,15 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
 
         if chave not in melhores_params_cache:
 
-            print(f"🔍 GridSearch RNA ({ano_atual})")
+            print(f"🔍 GridSearch RNA | ativo {file} | ano {ano_atual} | janela {janela}")
 
             model = MLPClassifier(max_iter=300)
 
-            grid = GridSearchCV(model, parametros_rna, cv=3, scoring='accuracy')
+            grid = GridSearchCV(model, parametros_rna, cv=3, scoring='accuracy', n_jobs=-1)
             grid.fit(x_treino, y_treino)
 
             melhores_params_cache[chave] = grid.best_estimator_.get_params()
+            salvar_params_cache()
 
         model = MLPClassifier(**melhores_params_cache[chave])
         model.fit(x_treino, y_treino)
@@ -388,14 +599,15 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
 
         if chave not in melhores_params_cache:
 
-            print(f"🔍 GridSearch RF ({ano_atual})")
+            print(f"🔍 GridSearch RF | ativo {file} | ano {ano_atual} | janela {janela}")
 
             model = RandomForestClassifier(random_state=42)
 
-            grid = GridSearchCV(model, parametros_rf, cv=3, scoring='accuracy')
+            grid = GridSearchCV(model, parametros_rf, cv=3, scoring='accuracy', n_jobs=-1)
             grid.fit(x_treino, y_treino)
 
             melhores_params_cache[chave] = grid.best_estimator_.get_params()
+            salvar_params_cache()
 
         model = RandomForestClassifier(**melhores_params_cache[chave])
         model.fit(x_treino, y_treino)
@@ -416,14 +628,15 @@ def treinar_e_avaliar(file, x_treino, y_treino, x_teste, y_teste_real,
 
         if chave not in melhores_params_cache:
 
-            print(f"🔍 GridSearch SVC ({ano_atual})")
+            print(f"🔍 GridSearch SVC | ativo {file} | ano {ano_atual} | janela {janela}")
 
             model = SVC()
 
-            grid = GridSearchCV(model, parametros_svc, cv=3, scoring='accuracy')
+            grid = GridSearchCV(model, parametros_svc, cv=3, scoring='accuracy', n_jobs=-1)
             grid.fit(x_treino, y_treino)
 
             melhores_params_cache[chave] = grid.best_estimator_.get_params()
+            salvar_params_cache()
 
         model = SVC(**melhores_params_cache[chave])
         model.fit(x_treino, y_treino)
