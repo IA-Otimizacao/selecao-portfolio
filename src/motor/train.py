@@ -1,10 +1,17 @@
 import pandas as pd
 import os
+import sys
 from tqdm import tqdm
-from src.utils import *
 import warnings
 import time
 import json
+import argparse
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from src.utils import *
 
 warnings.filterwarnings("ignore")
 
@@ -44,6 +51,28 @@ def obter_ativos(caminho="./data/pre_process/curated/"):
             ativos.add(ativo)
 
     return sorted(list(ativos))
+
+
+def filtrar_ativos(ativos, ativos_especificos=None):
+    if not ativos_especificos:
+        return ativos
+
+    ativos_normalizados = {ativo.upper() for ativo in ativos_especificos}
+    filtrados = [
+        ativo
+        for ativo in ativos
+        if ativo.upper() in ativos_normalizados
+    ]
+
+    ativos_nao_encontrados = sorted(ativos_normalizados - {ativo.upper() for ativo in filtrados})
+
+    if ativos_nao_encontrados:
+        print(
+            "⚠️ Ativos não encontrados na pasta curated: "
+            f"{', '.join(ativos_nao_encontrados)}"
+        )
+
+    return filtrados
 
 
 # ================= CHECKPOINT =================
@@ -156,13 +185,17 @@ def combinacao_completa(file, target, janela, base_dados):
 
 # ================= MAIN =================
 
-def main():
+def main(ativos_especificos=None):
 
     os.makedirs("./data/train/outputs", exist_ok=True)
     os.makedirs("./data/train/inputs", exist_ok=True)
 
     checkpoint_path = "./data/train/checkpoint.json"
-    todos = obter_ativos()
+    todos = filtrar_ativos(obter_ativos(), ativos_especificos)
+
+    if not todos:
+        print("\n⚠️ Nenhum ativo para processar.\n")
+        return
 
     intervalo_salvamento = 1800
     ultimo_salvamento = time.time()
@@ -354,4 +387,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ativo",
+        nargs="+",
+        help="Roda apenas o(s) ativo(s) informado(s), exemplo: --ativo PETR4",
+    )
+    args = parser.parse_args()
+
+    main(ativos_especificos=args.ativo)

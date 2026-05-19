@@ -222,13 +222,25 @@ def converter_data_refinitiv(coluna_data):
             regex=False
         )
 
-    datas = datas.fillna(
-        pd.to_datetime(datas_pt, format="%d-%b-%Y", errors="coerce")
-    )
+    pendentes = datas.isna()
 
-    datas = datas.fillna(
-        pd.to_datetime(datas_texto, dayfirst=True, errors="coerce")
-    )
+    if pendentes.any():
+        datas_pt_convertidas = pd.to_datetime(
+            datas_pt.loc[pendentes],
+            format="%d-%b-%Y",
+            errors="coerce"
+        )
+        datas.loc[pendentes] = datas_pt_convertidas
+
+    pendentes = datas.isna()
+
+    if pendentes.any():
+        datas_dayfirst = pd.to_datetime(
+            datas_texto.loc[pendentes],
+            dayfirst=True,
+            errors="coerce"
+        )
+        datas.loc[pendentes] = datas_dayfirst
 
     return datas
 
@@ -454,8 +466,6 @@ def z_split(base_dados):
 # ======================================================
 @medir_tempo
 def features_selection(x_dados, correlation_threshold=0.8):
-    from feature_engine.selection import DropCorrelatedFeatures
-
     colunas_de_interesse = [
         'r1','r2','r3','r4','r5','r6','r7','r8','r9','r10','r11',
         'r12','r13','r14','r15',
@@ -465,7 +475,13 @@ def features_selection(x_dados, correlation_threshold=0.8):
     # Remove features com variância muito baixa
     fs_qconst = VarianceThreshold(threshold=0.01)
 
-    x_dados_filtrado = fs_qconst.fit_transform(x_dados)
+    try:
+        x_dados_filtrado = fs_qconst.fit_transform(x_dados)
+    except ValueError:
+        variancias = x_dados.var(numeric_only=True)
+        coluna_maior_variancia = variancias.idxmax()
+
+        return x_dados[[coluna_maior_variancia]].copy()
 
     # Recupera nomes das colunas selecionadas
     colunas_selecionadas = np.array(colunas_de_interesse)[fs_qconst.get_support()]
@@ -476,7 +492,12 @@ def features_selection(x_dados, correlation_threshold=0.8):
         index=x_dados.index
     )
 
+    if x_dados_filtrado.shape[1] < 2:
+        return x_dados_filtrado
+
     # Remove features altamente correlacionadas
+    from feature_engine.selection import DropCorrelatedFeatures
+
     sel = DropCorrelatedFeatures(
         threshold=correlation_threshold,
         method='pearson',
