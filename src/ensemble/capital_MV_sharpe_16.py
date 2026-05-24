@@ -17,7 +17,7 @@ import pandas as pd
 # 10. Salva o historico de capital e os detalhes por ativo.
 
 # Tecnicas que aparecem no nome dos arquivos vindos da etapa 11.
-TECNICAS = ["esmble_jan_tot", "esmble_jan_par", "in_precision"]
+TECNICAS = ["esmble_jan_tot", "esmble_jan_par", "in_precision", "aleatorio"]
 
 # Margem pequena para comparar valores muito proximos de zero.
 EPSILON = 1e-12

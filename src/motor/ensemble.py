@@ -22,61 +22,89 @@ from src.ensemble.otimizacao_MV_sharpe_14 import run_otimizacao_mv_sharpe
 from src.ensemble.otimizacao_MV_min_variancia_15 import run_otimizacao_mv_min_variancia
 from src.ensemble.capital_MV_sharpe_16 import run_capital_mv_sharpe
 from src.ensemble.capital_MV_min_variancia_17 import run_capital_mv_min_variancia
+from src.ensemble.aleatorio_18 import run_aleatorio
+from src.ensemble.otimizacao_mv_sharpe_aleatorio_19 import (
+    run_otimizacao_mv_sharpe_aleatorio,
+)
+from src.ensemble.otimizacao_mv_min_variancia_aleatorio_20 import (
+    run_otimizacao_mv_min_variancia_aleatorio,
+)
+from src.ensemble.capital_mv_sharpe_aleatorio_21 import (
+    run_capital_mv_sharpe_aleatorio,
+)
+from src.ensemble.capital_mv_min_variancia_aleatorio_22 import (
+    run_capital_mv_min_variancia_aleatorio,
+)
 
 
 def run_ensemble():
     print("\n🚀 Iniciando pipeline de ENSEMBLE\n")
 
-    print("\n[1/17] Comparacao por tecnica")
+    print("\n[1/22] Comparacao por tecnica")
     run_comparison_tec()
 
-    print("\n[2/17] Comparacao por janela")
+    print("\n[2/22] Comparacao por janela")
     run_comparison_jan()
 
-    print("\n[3/17] Comparacao de precision")
+    print("\n[3/22] Comparacao de precision")
     run_comparison_precision()
 
-    print("\n[4/17] Melhor precision por valor")
+    print("\n[4/22] Melhor precision por valor")
     run_comparison_esmbs()
 
-    print("\n[5/17] Acuracia precision")
+    print("\n[5/22] Acuracia precision")
     run_acuracia_precision()
 
-    print("\n[6/17] Comparacao completa")
+    print("\n[6/22] Comparacao completa")
     gerar_comparacao_completa()
 
-    print("\n[7/17] Juncao intraday")
+    print("\n[7/22] Juncao intraday")
     run_join_intr()
 
-    print("\n[8/17] Calculo monetario")
+    print("\n[8/22] Calculo monetario")
     run_invest()
 
-    print("\n[9/17] Calculo de capital")
+    print("\n[9/22] Calculo de capital")
     run_calculo_capital()
 
-    print("\n[10/17] Juncao de ativos por target")
+    print("\n[10/22] Juncao de ativos por target")
     run_df_por_target()
 
-    print("\n[11/17] Separacao por tecnica")
+    print("\n[11/22] Separacao por tecnica")
     separar_por_tecnica()
 
-    print("\n[12/17] Estrategia 1/n")
+    print("\n[12/22] Estrategia 1/n")
     processar_estrategia()
 
-    print("\n[13/17] Base MV Sharpe")
+    print("\n[13/22] Base MV Sharpe")
     run_base_mv_sharpe()
 
-    print("\n[14/17] Otimizacao MV Sharpe")
+    print("\n[14/22] Otimizacao MV Sharpe")
     run_otimizacao_mv_sharpe()
 
-    print("\n[15/17] Otimizacao MV Min Variancia")
+    print("\n[15/22] Otimizacao MV Min Variancia")
     run_otimizacao_mv_min_variancia()
 
-    print("\n[16/17] Capital MV Sharpe")
+    print("\n[16/22] Capital MV Sharpe")
     run_capital_mv_sharpe()
 
-    print("\n[17/17] Capital MV Min Variancia")
+    print("\n[17/22] Capital MV Min Variancia")
     run_capital_mv_min_variancia()
+
+    print("\n[18/22] Random + estrategia 1/n aleatoria")
+    run_aleatorio()
+
+    print("\n[19/22] Otimizacao MV Sharpe aleatoria")
+    run_otimizacao_mv_sharpe_aleatorio()
+
+    print("\n[20/22] Otimizacao MV Min Variancia aleatoria")
+    run_otimizacao_mv_min_variancia_aleatorio()
+
+    print("\n[21/22] Capital MV Sharpe aleatorio")
+    run_capital_mv_sharpe_aleatorio()
+
+    print("\n[22/22] Capital MV Min Variancia aleatorio")
+    run_capital_mv_min_variancia_aleatorio()
 
     print("\n✅ Pipeline de ensemble finalizado com sucesso!")
 

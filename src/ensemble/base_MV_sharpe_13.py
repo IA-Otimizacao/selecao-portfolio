@@ -21,12 +21,20 @@ from src.utils import carregar_dados, padronizar_colunas, remover_linhas_invalid
 # 7. Salva a base intermediaria usada pelas otimizacoes Markowitz.
 
 # As tecnicas existentes aparecem no nome do arquivo e no sufixo das colunas.
-TECNICAS = ["esmble_jan_tot", "esmble_jan_par", "in_precision"]
+TECNICAS = ["esmble_jan_tot", "esmble_jan_par", "in_precision", "aleatorio"]
 
 
-def extrair_tecnica(nome_arquivo):
+def normalizar_tecnicas(tecnicas=None):
+    if tecnicas is None:
+        return TECNICAS
+
+    return list(tecnicas)
+
+
+def extrair_tecnica(nome_arquivo, tecnicas=None):
+    tecnicas = normalizar_tecnicas(tecnicas)
     tecnica = next(
-        (tec for tec in TECNICAS if nome_arquivo.startswith(f"{tec}_target_")),
+        (tec for tec in tecnicas if nome_arquivo.startswith(f"{tec}_target_")),
         None
     )
 
@@ -59,9 +67,10 @@ def valor_binario(valor):
     return int(valor_float(valor) == 1.0)
 
 
-def identificar_ativos_input(input_folder, price_folder):
+def identificar_ativos_input(input_folder, price_folder, tecnicas=None):
     # Varre os arquivos de sinais para descobrir quais ativos existem no input
     # e mantem somente os que tambem possuem arquivo de preco.
+    tecnicas = normalizar_tecnicas(tecnicas)
     ativos = set()
 
     arquivos = sorted([
@@ -202,11 +211,11 @@ def carregar_fechamentos(ativos, price_folder):
     return fechamentos.sort_values("data").reset_index(drop=True)
 
 
-def montar_base_sinais(caminho_sinais, ativos, price_folder):
+def montar_base_sinais(caminho_sinais, ativos, price_folder, tecnicas=None):
     # Monta a base final daquele arquivo de tecnica/target:
     # data + sinais + bin_aux + fechamentos usados no calculo dos pesos.
     nome_arquivo = os.path.basename(caminho_sinais)
-    tecnica = extrair_tecnica(nome_arquivo)
+    tecnica = extrair_tecnica(nome_arquivo, tecnicas=tecnicas)
     target = extrair_target(nome_arquivo)
 
     df = pd.read_csv(caminho_sinais)
@@ -255,10 +264,12 @@ def run_base_mv_sharpe(
     input_folder="./data/ensemble/11_targets_por_tecnica/",
     output_folder="./data/ensemble/13_base_mv_sharpe/",
     price_folder="./data/pre_process/raw/refinitiv/",
-    ativos=None
+    ativos=None,
+    tecnicas=None
 ):
     # Executa a etapa 13 inteira para todos os arquivos da etapa 11.
     os.makedirs(output_folder, exist_ok=True)
+    tecnicas = normalizar_tecnicas(tecnicas)
 
     arquivos = sorted([
         arquivo
@@ -267,7 +278,11 @@ def run_base_mv_sharpe(
     ])
 
     if ativos is None:
-        ativos = identificar_ativos_input(input_folder, price_folder)
+        ativos = identificar_ativos_input(
+            input_folder,
+            price_folder,
+            tecnicas=tecnicas
+        )
 
     if not ativos:
         print("Nenhum ativo encontrado para montar as bases MV Sharpe.")
@@ -283,7 +298,8 @@ def run_base_mv_sharpe(
         base = montar_base_sinais(
             caminho,
             ativos=ativos,
-            price_folder=price_folder
+            price_folder=price_folder,
+            tecnicas=tecnicas
         )
 
         output_path = os.path.join(output_folder, arquivo)
